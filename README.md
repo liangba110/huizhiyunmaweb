@@ -11,6 +11,7 @@
 backend/             Node.js + Express 后端（API、路由、中间件）
   seo/               SEO 自动化：文章生成、城市页生成、百度/IndexNow 推送、白名单
 frontend/            Vue 3 + Vite 前端（src/、public/、vite.config.js）
+  dist/              线上静态页快照（3606 文件，58 MB，已入库）
 marketing-drafts/    每日营销文案草稿（按日期归档）
 templates-demo/      模板商城演示页（standard / premium / pro）
 uploads/             上传资源：模板 zip、微信二维码、免费下载文档
@@ -37,11 +38,14 @@ secrets-enc/         敏感文件加密产物（见其内 README）
 | 路径 | 原因 |
 |---|---|
 | `*/node_modules/` | 依赖，`npm install` 可恢复 |
-| `frontend/dist/` | 构建产物（含 300+ 城市站静态页，约 68MB），由 `backend/seo/generate.js` 生成 |
-| `backend/.env` | 含数据库密码、JWT 密钥、第三方 API Key（已加密归档思路见下） |
+| `backend/.env` | 含数据库密码、JWT 密钥、第三方 API Key（键名清单见 `secrets-enc/README.md`） |
 | `*.bak_*` / `*.log` | 服务器历史备份与运行日志（117 个） |
 
-> `backend/.env` 的**键名清单**记录在 `seo-audit/` 中；如需完整备份请联系项目负责人。
+> `frontend/dist/` **已入库**（3606 个文件，58 MB）。它是线上 SEO 内容的唯一快照
+> —— 300+ 城市站页面、文章页、案例页、sitemap 均已生成完毕，重新生成依赖数据库与 AI 接口。
+> 该目录由 `backend/seo/generate.js` 生成，日常改代码后重新 `npm run build` 再提交即可。
+
+> `backend/.env` 的**键名清单**见 `secrets-enc/README.md`；完整的 `.env` 如需备份请联系项目负责人。
 
 ## 部署
 
