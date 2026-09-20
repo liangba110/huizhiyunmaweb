@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>企业品牌官网 - 至尊版 | 汇智云码模板</title>
+  <meta name="description" content="汇智云码企业官网至尊版模板 - 用户系统、在线支付、API对接、一对一部署">
+  <style>
+    :root {
+      --primary: #7C3AED; --primary-dark: #5B21B6; --primary-light: #A78BFA; --success: #22C55E;
+      --bg: #0F172A; --bg-card: #1E293B; --text: #F1F5F9; --text-muted: #94A3B8; --radius: 12px; --shadow: 0 8px 32px rgba(0,0,0,.3);
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+      background:var(--bg); color:var(--text); line-height:1.6; overflow-x:hidden;
+    }
+    .bg-animated { position:fixed; top:0; left:0; width:100%; height:100%; background:linear-gradient(135deg,#0F172A 0%,#1E1B4B 50%,#0F172A 100%); z-index:-2; }
+    .bg-grid { position:fixed; top:0; left:0; width:100%; height:100%; background-image:linear-gradient(rgba(124,58,237,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(124,58,237,.08) 1px,transparent 1px); background-size:60px 60px; z-index:-1; }
+    .bg-glow { position:fixed; top:-20%; left:20%; width:60%; height:60%; background:radial-gradient(circle,rgba(124,58,237,.15) 0%,transparent 70%); z-index:-1; }
+    .container { max-width:1200px; margin:0 auto; padding:0 24px; }
+
+    header { padding:20px 0; background:rgba(15,23,42,.8); backdrop-filter:blur(20px); border-bottom:1px solid rgba(124,58,237,.2); position:sticky; top:0; z-index:100; }
+    header .container { display:flex; justify-content:space-between; align-items:center; }
+    .logo { font-size:24px; font-weight:800; color:var(--text); text-decoration:none; }
+    .logo span { color:var(--primary-light); }
+    .lang-switch { display:inline-flex; background:var(--bg-card); padding:3px; border-radius:8px; border:1px solid rgba(124,58,237,.2); }
+    .lang-switch button { padding:4px 12px; border:none; background:transparent; color:var(--text-muted); border-radius:6px; cursor:pointer; font-size:13px; transition:all .2s; }
+    .lang-switch button.active { background:var(--primary); color:#fff; }
+    nav { display:flex; align-items:center; gap:16px; }
+    nav a { color:var(--text-muted); text-decoration:none; font-size:14px; transition:color .2s; }
+    nav a:hover, nav a.active { color:var(--text); }
+    .user-menu { display:flex; align-items:center; gap:10px; }
+    .avatar { width:32px; height:32px; border-radius:50%; background:var(--primary); display:flex; align-items:center; justify-content:center; font-size:14px; color:#fff; cursor:pointer; }
+    .btn { display:inline-block; padding:10px 24px; border-radius:var(--radius); font-weight:600; text-decoration:none; transition:all .2s; cursor:pointer; border:none; font-size:14px; }
+    .btn-primary { background:var(--primary); color:#fff; }
+    .btn-primary:hover { background:var(--primary-dark); transform:translateY(-2px); box-shadow:0 8px 24px rgba(124,58,237,.3); }
+    .btn-sm { padding:6px 16px; font-size:13px; }
+    .btn-outline { border:2px solid var(--primary-light); color:var(--primary-light); background:transparent; }
+    .btn-outline:hover { background:var(--primary); color:#fff; border-color:var(--primary); }
+
+    .hero { text-align:center; padding:100px 0 80px; }
+    .hero h1 { font-size:48px; font-weight:800; margin-bottom:16px; line-height:1.2; }
+    .hero h1 span { background:linear-gradient(135deg,#A78BFA,#F472B6); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .hero p { font-size:18px; color:var(--text-muted); max-width:650px; margin:0 auto 32px; }
+    .hero-badge { display:inline-block; padding:6px 16px; border-radius:20px; background:rgba(124,58,237,.15); color:var(--primary-light); font-size:14px; margin-bottom:20px; border:1px solid rgba(124,58,237,.3); }
+
+    section { padding:80px 0; }
+    .section-title { text-align:center; margin-bottom:48px; }
+    .section-title h2 { font-size:32px; font-weight:700; margin-bottom:12px; }
+    .section-title p { color:var(--text-muted); font-size:16px; }
+
+    .features-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:24px; }
+    .feature-card { background:var(--bg-card); border-radius:var(--radius); padding:28px; border:1px solid rgba(124,58,237,.1); transition:all .3s; }
+    .feature-card:hover { transform:translateY(-4px); border-color:var(--primary); box-shadow:0 12px 40px rgba(124,58,237,.15); }
+    .feature-icon { width:48px; height:48px; border-radius:12px; background:rgba(124,58,237,.15); display:flex; align-items:center; justify-content:center; font-size:24px; margin-bottom:14px; }
+    .feature-card h3 { font-size:17px; margin-bottom:6px; }
+    .feature-card p { color:var(--text-muted); font-size:14px; line-height:1.7; }
+
+    /* Pricing */
+    .pricing-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; max-width:1000px; margin:0 auto; }
+    .pricing-card { background:var(--bg-card); border-radius:var(--radius); padding:32px; border:1px solid rgba(124,58,237,.1); text-align:center; transition:all .3s; position:relative; }
+    .pricing-card.featured { border-color:var(--primary); box-shadow:0 0 40px rgba(124,58,237,.15); }
+    .pricing-card.featured::before { content:'推荐'; position:absolute; top:-12px; left:50%; transform:translateX(-50%); background:var(--primary); color:#fff; padding:4px 16px; border-radius:12px; font-size:12px; }
+    .pricing-card:hover { transform:translateY(-4px); }
+    .pricing-price { font-size:36px; font-weight:800; color:var(--text); margin:16px 0; }
+    .pricing-price span { font-size:16px; color:var(--text-muted); }
+    .pricing-features { text-align:left; margin:20px 0; }
+    .pricing-features li { list-style:none; padding:6px 0; color:var(--text-muted); font-size:14px; }
+    .pricing-features li::before { content:'✓ '; color:var(--success); font-weight:bold; }
+
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; max-width:900px; margin:0 auto; }
+    .stat { text-align:center; background:var(--bg-card); border-radius:var(--radius); padding:24px; border:1px solid rgba(124,58,237,.1); }
+    .stat-num { font-size:28px; font-weight:800; color:var(--primary-light); }
+    .stat-label { color:var(--text-muted); font-size:13px; margin-top:4px; }
+
+    .contact-grid { display:grid; grid-template-columns:1fr 1fr; gap:48px; }
+    .contact-info p { color:var(--text-muted); margin-bottom:8px; font-size:15px; }
+    .contact-info strong { color:var(--text); }
+    .contact-form input,.contact-form textarea { width:100%; padding:12px 16px; border-radius:var(--radius); border:1px solid rgba(124,58,237,.2); background:var(--bg-card); color:var(--text); font-size:15px; margin-bottom:16px; }
+    .contact-form textarea { height:100px; resize:vertical; }
+
+    footer { background:var(--bg-card); border-top:1px solid rgba(124,58,237,.1); padding:32px 0; text-align:center; }
+    footer p { color:var(--text-muted); font-size:14px; }
+
+    /* Modal */
+    .modal-overlay { display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,.6); z-index:1000; align-items:center; justify-content:center; }
+    .modal-overlay.open { display:flex; }
+    .modal { background:var(--bg-card); border-radius:var(--radius); padding:32px; max-width:420px; width:90%; border:1px solid rgba(124,58,237,.2); }
+    .modal h2 { margin-bottom:16px; }
+    .modal input { width:100%; padding:10px 14px; border-radius:8px; border:1px solid rgba(124,58,237,.2); background:var(--bg); color:var(--text); font-size:14px; margin-bottom:12px; }
+    .modal .btn { width:100%; margin-top:8px; }
+    .modal .close { float:right; background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:20px; }
+
+    .dashboard { display:none; padding:40px 0; }
+    .dashboard.open { display:block; }
+    .dashboard-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:32px; }
+    .dash-card { background:var(--bg-card); border-radius:var(--radius); padding:20px; border:1px solid rgba(124,58,237,.1); }
+    .dash-card h4 { color:var(--text-muted); font-size:13px; margin-bottom:8px; }
+    .dash-card .value { font-size:24px; font-weight:800; color:var(--primary-light); }
+
+    /* API Docs */
+    .api-section { background:var(--bg-card); border-radius:var(--radius); padding:24px; margin-bottom:16px; border:1px solid rgba(124,58,237,.1); }
+    .api-section h4 { margin-bottom:8px; }
+    .api-code { background:rgba(0,0,0,.3); border-radius:8px; padding:12px; font-family:'Courier New',monospace; font-size:13px; overflow-x:auto; white-space:pre; color:var(--primary-light); }
+
+    @media (max-width:768px) {
+      .hero h1 { font-size:32px; }
+      .pricing-grid,.stats { grid-template-columns:1fr; }
+      .contact-grid { grid-template-columns:1fr; }
+      .dashboard-grid { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="bg-animated"></div><div class="bg-grid"></div><div class="bg-glow"></div>
+
+<header>
+  <div class="container">
+    <a href="#" class="logo">企业<span>官网</span><span style="font-size:12px;color:var(--text-muted);margin-left:6px">至尊版</span></a>
+    <nav>
+      <a href="https://openai2000.cn" target="_blank" style="border:1px solid var(--primary-light);color:var(--primary-light);padding:4px 12px;border-radius:6px;">↩ 返回官网</a>
+      <a href="#" class="active">首页</a>
+      <a href="#features">功能</a>
+      <a href="#pricing">价格</a>
+      <a href="#api">API</a>
+      <a href="#contact">联系</a>
+      <div class="user-menu" id="userMenu">
+        <button class="btn btn-primary btn-sm" onclick="showLogin()">登录</button>
+        <button class="btn btn-outline btn-sm" onclick="showRegister()">注册</button>
+      </div>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge">👑 至尊版 - 旗舰配置</div>
+    <h1>企业级数字化平台<br><span>全功能一体化解决方案</span></h1>
+    <p>用户系统 · 在线支付 · API对接 · 多语言 · 博客 · 在线咨询 · 一对一部署服务</p>
+    <a href="#pricing" class="btn btn-primary">查看方案</a>
+    <a href="#api" class="btn btn-outline" style="margin-left:12px">API文档</a>
+  </div>
+</section>
+
+<!-- Dashboard (after login) -->
+<section class="dashboard" id="dashboard">
+  <div class="container">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px">
+      <h2>👋 欢迎回来，<span id="dashUser">用户</span></h2>
+      <button class="btn btn-outline btn-sm" onclick="logout()">退出登录</button>
+    </div>
+    <div class="dashboard-grid">
+      <div class="dash-card"><h4>我的订单</h4><div class="value">3</div></div>
+      <div class="dash-card"><h4>积分余额</h4><div class="value">1,280</div></div>
+      <div class="dash-card"><h4>API调用次数</h4><div class="value">2,456</div></div>
+    </div>
+    <div style="background:var(--bg-card);border-radius:var(--radius);padding:20px;border:1px solid rgba(124,58,237,.1)">
+      <h3 style="margin-bottom:12px">最近订单</h3>
+      <table style="width:100%;border-collapse:collapse;font-size:14px">
+        <tr style="border-bottom:1px solid rgba(124,58,237,.1)"><th style="text-align:left;padding:8px;color:var(--text-muted)">订单号</th><th style="text-align:left;padding:8px;color:var(--text-muted)">产品</th><th style="text-align:left;padding:8px;color:var(--text-muted)">金额</th><th style="text-align:left;padding:8px;color:var(--text-muted)">状态</th></tr>
+        <tr><td style="padding:8px">ORD-20260701-001</td><td style="padding:8px">至尊版-企业官网</td><td style="padding:8px">¥600</td><td style="padding:8px;color:var(--success)">已完成</td></tr>
+        <tr><td style="padding:8px">ORD-20260615-002</td><td style="padding:8px">API接口包-5000次</td><td style="padding:8px">¥200</td><td style="padding:8px;color:var(--success)">已完成</td></tr>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="container">
+    <div class="section-title">
+      <h2>旗舰功能</h2>
+      <p>至尊版独有的一站式企业数字平台</p>
+    </div>
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">👤</div>
+        <h3>用户系统</h3>
+        <p>完整的注册/登录/个人中心，支持密码重置、个人信息管理，可拓展至会员等级体系</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">💳</div>
+        <h3>在线支付</h3>
+        <p>集成微信支付/支付宝，支持订单生成、支付回调、退款管理，源码自带完整支付流程</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🔗</div>
+        <h3>API对接</h3>
+        <p>RESTful API接口，提供数据查询、订单管理、用户认证等接口，方便二次开发和系统集成</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🌍</div>
+        <h3>多语言 + 多国家</h3>
+        <p>支持中/英/日/韩等多语言，可配置多国家货币和时区，助力企业全球化</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">📊</div>
+        <h3>数据面板</h3>
+        <p>登录后可查看订单统计、积分余额、API调用量等数据，实时掌握业务动态</p>
+      </div>
+      <div class="feature-card">
+        <div class="feature-icon">🎯</div>
+        <h3>一对一部署</h3>
+        <p>由资深开发工程师全程协助完成服务器配置、域名绑定、SSL证书、上线测试，确保顺利交付</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="pricing" style="background:rgba(124,58,237,.03)">
+  <div class="container">
+    <div class="section-title">
+      <h2>方案与价格</h2>
+      <p>选择最适合您需求的方案</p>
+    </div>
+    <div class="pricing-grid">
+      <div class="pricing-card">
+        <h3>基础版</h3>
+        <div class="pricing-price">¥200<span>/次</span></div>
+        <p style="color:var(--text-muted);font-size:14px">适合个人工作室 / 初创团队</p>
+        <ul class="pricing-features">
+          <li>5个核心页面</li>
+          <li>响应式设计</li>
+          <li>SEO基础优化</li>
+          <li>联系表单</li>
+          <li>源码交付</li>
+        </ul>
+        <button class="btn btn-outline" style="width:100%">了解详情</button>
+      </div>
+      <div class="pricing-card featured">
+        <h3>专业版</h3>
+        <div class="pricing-price">¥400<span>/次</span></div>
+        <p style="color:var(--text-muted);font-size:14px">适合成长型企业</p>
+        <ul class="pricing-features">
+          <li>基础版全部功能</li>
+          <li>博客系统</li>
+          <li>在线咨询</li>
+          <li>多语言支持</li>
+          <li>10+页面</li>
+        </ul>
+        <button class="btn btn-primary" style="width:100%">了解详情</button>
+      </div>
+      <div class="pricing-card">
+        <h3>至尊版</h3>
+        <div class="pricing-price">¥600<span>/次</span></div>
+        <p style="color:var(--text-muted);font-size:14px">适合大型企业 / 品牌方</p>
+        <ul class="pricing-features">
+          <li>专业版全部功能</li>
+          <li>用户系统</li>
+          <li>在线支付</li>
+          <li>API对接</li>
+          <li>一对一部署</li>
+        </ul>
+        <button class="btn btn-outline" style="width:100%">了解详情</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="api">
+  <div class="container">
+    <div class="section-title">
+      <h2>API文档</h2>
+      <p>至尊版独有 · RESTful API接口 · 方便二次开发</p>
+    </div>
+    <div class="api-section">
+      <h4>🔑 认证接口</h4>
+      <div class="api-code">POST /api/auth/login   用户登录
+POST /api/auth/register  用户注册
+POST /api/auth/logout  退出登录</div>
+    </div>
+    <div class="api-section">
+      <h4>📦 商品/订单接口</h4>
+      <div class="api-code">GET  /api/products       获取商品列表
+POST /api/orders        创建订单
+GET  /api/orders/:id    查询订单详情
+POST /api/payment       发起支付</div>
+    </div>
+    <div class="api-section">
+      <h4>📊 数据接口</h4>
+      <div class="api-code">GET  /api/stats/dashboard  获取用户数据面板
+GET  /api/stats/orders    获取订单统计</div>
+    </div>
+  </div>
+</section>
+
+<section id="contact">
+  <div class="container">
+    <div class="section-title">
+      <h2>联系我们</h2>
+      <p>一对一部署服务 · 专属客户经理</p>
+    </div>
+    <div class="contact-grid">
+      <div class="contact-info">
+        <p><strong>📞 电话：</strong>151-6528-0518</p>
+        <p><strong>📧 邮箱：</strong>contact@example.com</p>
+        <p><strong>💬 微信：</strong>bbks201805</p>
+        <p><strong>📍 地址：</strong>山东省青岛市胶州市阜安街道东关大街8号中央公园写字楼11楼</p>
+        <p style="margin-top:16px">至尊版客户尊享一对一专属服务，我们的工程师将在1小时内与您联系。</p>
+      </div>
+      <form class="contact-form" onsubmit="event.preventDefault();alert('感谢咨询！专属客户经理将在1小时内与您联系。')">
+        <input type="text" placeholder="您的姓名" required>
+        <input type="tel" placeholder="联系电话" required>
+        <input type="email" placeholder="电子邮箱">
+        <select style="width:100%;padding:12px 16px;border-radius:var(--radius);border:1px solid rgba(124,58,237,.2);background:var(--bg-card);color:var(--text);font-size:15px;margin-bottom:16px">
+          <option>请选择咨询方案</option><option>至尊版 - 全功能</option><option>专业版 - 进阶配置</option><option>基础版 - 入门级</option><option>定制开发</option>
+        </select>
+        <textarea placeholder="请描述您的需求..." required></textarea>
+        <button type="submit" class="btn btn-primary" style="width:100%">提交咨询</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>© 2026 企业官网至尊版模板 · 汇智云码科技出品 · 鲁ICP备2026038130号</p>
+  </div>
+</footer>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <button class="close" onclick="closeModal()">✕</button>
+    <h2 id="modalTitle">登录</h2>
+    <form id="authForm" onsubmit="handleAuth(event)">
+      <input type="text" id="authName" placeholder="用户名" required>
+      <input type="password" id="authPass" placeholder="密码" required>
+      <button type="submit" class="btn btn-primary" id="modalSubmit">登录</button>
+    </form>
+    <p style="text-align:center;margin-top:12px;color:var(--text-muted);font-size:13px">
+      <span id="modalSwitchText">还没有账号？</span>
+      <a href="#" onclick="switchAuthMode()" style="color:var(--primary-light)" id="modalSwitchLink">立即注册</a>
+    </p>
+  </div>
+</div>
+
+<script>
+let authMode = 'login';
+function showLogin() { authMode='login'; document.getElementById('modalTitle').textContent='登录'; document.getElementById('modalSubmit').textContent='登录'; document.getElementById('modalSwitchText').textContent='还没有账号？'; document.getElementById('modalSwitchLink').textContent='立即注册'; document.getElementById('modalOverlay').classList.add('open'); }
+function showRegister() { authMode='register'; document.getElementById('modalTitle').textContent='注册'; document.getElementById('modalSubmit').textContent='注册'; document.getElementById('modalSwitchText').textContent='已有账号？'; document.getElementById('modalSwitchLink').textContent='去登录'; document.getElementById('modalOverlay').classList.add('open'); }
+function switchAuthMode() { if(authMode==='login') showRegister(); else showLogin(); }
+function closeModal() { document.getElementById('modalOverlay').classList.remove('open'); }
+function handleAuth(e) { e.preventDefault();
+  const name = document.getElementById('authName').value;
+  if(authMode==='register') {
+    alert('注册成功！欢迎您，'+name);
+  }
+  document.getElementById('dashUser').textContent = name;
+  document.getElementById('dashboard').classList.add('open');
+  document.getElementById('userMenu').innerHTML = '<div class="avatar">'+name[0]+'</div><span style="font-size:13px;color:var(--text-muted)">'+name+'</span>';
+  closeModal();
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function logout() {
+  document.getElementById('dashboard').classList.remove('open');
+  document.getElementById('userMenu').innerHTML = '<button class="btn btn-primary btn-sm" onclick="showLogin()">登录</button><button class="btn btn-outline btn-sm" onclick="showRegister()">注册</button>';
+}
+</script>
+</body>
+</html>

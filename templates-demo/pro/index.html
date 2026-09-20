@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>企业品牌官网 - 专业版 | 汇智云码模板</title>
+  <meta name="description" content="汇智云码企业官网专业版模板 - 包含博客系统、在线咨询、多语言支持">
+  <style>
+    :root {
+      --primary: #4F46E5;
+      --primary-dark: #3730A3;
+      --primary-light: #818CF8;
+      --bg: #0F172A;
+      --bg-card: #1E293B;
+      --bg-section: #1a1f35;
+      --text: #F1F5F9;
+      --text-muted: #94A3B8;
+      --radius: 12px;
+      --shadow: 0 8px 32px rgba(0,0,0,.3);
+      --success: #22C55E;
+      --warning: #F59E0B;
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg); color: var(--text); line-height:1.6; overflow-x:hidden;
+    }
+    .bg-animated {
+      position:fixed; top:0; left:0; width:100%; height:100%;
+      background:linear-gradient(135deg,#0F172A 0%,#1E1B4B 50%,#0F172A 100%); z-index:-2;
+    }
+    .bg-grid {
+      position:fixed; top:0; left:0; width:100%; height:100%;
+      background-image:linear-gradient(rgba(79,70,229,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(79,70,229,.08) 1px,transparent 1px);
+      background-size:60px 60px; z-index:-1;
+    }
+    .bg-glow {
+      position:fixed; top:-20%; left:20%; width:60%; height:60%;
+      background:radial-gradient(circle,rgba(79,70,229,.15) 0%,transparent 70%); z-index:-1;
+    }
+    .container { max-width:1200px; margin:0 auto; padding:0 24px; }
+
+    /* Header */
+    header {
+      padding:20px 0; background:rgba(15,23,42,.8); backdrop-filter:blur(20px);
+      border-bottom:1px solid rgba(79,70,229,.2); position:sticky; top:0; z-index:100;
+    }
+    header .container { display:flex; justify-content:space-between; align-items:center; }
+    .logo { font-size:24px; font-weight:800; color:var(--text); text-decoration:none; }
+    .logo span { color:var(--primary-light); }
+
+    .lang-switch {
+      display:inline-flex; background:var(--bg-card); padding:3px; border-radius:8px; border:1px solid rgba(79,70,229,.2);
+    }
+    .lang-switch button {
+      padding:4px 12px; border:none; background:transparent; color:var(--text-muted); border-radius:6px;
+      cursor:pointer; font-size:13px; transition:all .2s;
+    }
+    .lang-switch button.active { background:var(--primary); color:#fff; }
+
+    nav { display:flex; align-items:center; gap:20px; }
+    nav a {
+      color:var(--text-muted); text-decoration:none; font-size:14px; transition:color .2s;
+    }
+    nav a:hover, nav a.active { color:var(--text); }
+
+    .btn {
+      display:inline-block; padding:10px 24px; border-radius:var(--radius); font-weight:600;
+      text-decoration:none; transition:all .2s; cursor:pointer; border:none;
+    }
+    .btn-primary { background:var(--primary); color:#fff; }
+    .btn-primary:hover { background:var(--primary-dark); transform:translateY(-2px); box-shadow:0 8px 24px rgba(79,70,229,.3); }
+    .btn-sm { padding:6px 16px; font-size:13px; }
+
+    /* Hero */
+    .hero { text-align:center; padding:100px 0 80px; }
+    .hero h1 { font-size:48px; font-weight:800; margin-bottom:16px; line-height:1.2; }
+    .hero h1 span { background:linear-gradient(135deg,#818CF8,#C084FC); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .hero p { font-size:18px; color:var(--text-muted); max-width:600px; margin:0 auto 32px; }
+    .hero-badge { display:inline-block; padding:6px 16px; border-radius:20px; background:rgba(79,70,229,.15); color:var(--primary-light); font-size:14px; margin-bottom:20px; border:1px solid rgba(79,70,229,.3); }
+
+    section { padding:80px 0; }
+    .section-title { text-align:center; margin-bottom:48px; }
+    .section-title h2 { font-size:32px; font-weight:700; margin-bottom:12px; }
+    .section-title p { color:var(--text-muted); font-size:16px; }
+
+    /* Services */
+    .services-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr)); gap:24px; }
+    .service-card { background:var(--bg-card); border-radius:var(--radius); padding:28px; border:1px solid rgba(79,70,229,.1); transition:all .3s; }
+    .service-card:hover { transform:translateY(-4px); border-color:var(--primary); box-shadow:0 12px 40px rgba(79,70,229,.15); }
+    .service-icon { width:48px; height:48px; border-radius:12px; background:rgba(79,70,229,.15); display:flex; align-items:center; justify-content:center; font-size:24px; margin-bottom:14px; }
+    .service-card h3 { font-size:17px; margin-bottom:6px; }
+    .service-card p { color:var(--text-muted); font-size:14px; line-height:1.7; }
+
+    /* Blog */
+    .blog-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:24px; }
+    .blog-card { background:var(--bg-card); border-radius:var(--radius); overflow:hidden; border:1px solid rgba(79,70,229,.1); transition:all .3s; }
+    .blog-card:hover { transform:translateY(-4px); border-color:var(--primary); }
+    .blog-img { height:180px; background:linear-gradient(135deg,#1E293B,#312E81); display:flex; align-items:center; justify-content:center; font-size:36px; }
+    .blog-body { padding:20px; }
+    .blog-meta { color:var(--text-muted); font-size:12px; margin-bottom:8px; }
+    .blog-body h3 { font-size:16px; margin-bottom:6px; }
+    .blog-body p { color:var(--text-muted); font-size:13px; margin-bottom:12px; }
+    .blog-tag { display:inline-block; padding:2px 10px; border-radius:12px; background:rgba(79,70,229,.12); color:var(--primary-light); font-size:11px; margin-right:4px; }
+
+    /* Online Chat Widget */
+    .chat-widget {
+      position:fixed; bottom:24px; right:24px; z-index:999;
+    }
+    .chat-btn {
+      width:60px; height:60px; border-radius:50%; background:var(--primary); border:none;
+      color:#fff; font-size:28px; cursor:pointer; box-shadow:0 8px 24px rgba(79,70,229,.4);
+      transition:all .2s; display:flex; align-items:center; justify-content:center;
+    }
+    .chat-btn:hover { transform:scale(1.1); }
+    .chat-box {
+      position:absolute; bottom:80px; right:0; width:340px; height:440px;
+      background:var(--bg-card); border-radius:var(--radius); border:1px solid rgba(79,70,229,.2);
+      box-shadow:var(--shadow); display:none; flex-direction:column; overflow:hidden;
+    }
+    .chat-box.open { display:flex; }
+    .chat-header { padding:16px; background:var(--primary); color:#fff; font-weight:600; display:flex; justify-content:space-between; align-items:center; }
+    .chat-close { background:none; border:none; color:#fff; cursor:pointer; font-size:18px; }
+    .chat-msgs { flex:1; padding:16px; overflow-y:auto; }
+    .chat-msg { margin-bottom:12px; max-width:80%; }
+    .chat-msg.bot { }
+    .chat-msg.user { margin-left:auto; }
+    .chat-msg p { background:rgba(79,70,229,.1); border-radius:12px; padding:10px 14px; font-size:13px; }
+    .chat-msg.user p { background:var(--primary); color:#fff; border-radius:12px 12px 0 12px; }
+    .chat-msg .time { font-size:11px; color:var(--text-muted); margin-top:4px; }
+    .chat-input-wrap { padding:12px; border-top:1px solid rgba(79,70,229,.1); display:flex; gap:8px; }
+    .chat-input-wrap input { flex:1; padding:10px 14px; border-radius:8px; border:1px solid rgba(79,70,229,.2); background:var(--bg); color:var(--text); font-size:14px; }
+    .chat-input-wrap button { padding:10px 16px; border-radius:8px; background:var(--primary); color:#fff; border:none; cursor:pointer; }
+
+    /* Stats */
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; max-width:900px; margin:0 auto; }
+    .stat { text-align:center; background:var(--bg-card); border-radius:var(--radius); padding:24px; border:1px solid rgba(79,70,229,.1); }
+    .stat-num { font-size:28px; font-weight:800; color:var(--primary-light); }
+    .stat-label { color:var(--text-muted); font-size:13px; margin-top:4px; }
+
+    /* Contact */
+    .contact-grid { display:grid; grid-template-columns:1fr 1fr; gap:48px; }
+    .contact-info p { color:var(--text-muted); margin-bottom:8px; font-size:15px; }
+    .contact-info strong { color:var(--text); }
+    .contact-form input,.contact-form textarea {
+      width:100%; padding:12px 16px; border-radius:var(--radius); border:1px solid rgba(79,70,229,.2);
+      background:var(--bg-card); color:var(--text); font-size:15px; margin-bottom:16px;
+    }
+    .contact-form textarea { height:100px; resize:vertical; }
+
+    footer { background:var(--bg-card); border-top:1px solid rgba(79,70,229,.1); padding:32px 0; text-align:center; }
+    footer p { color:var(--text-muted); font-size:14px; }
+
+    @media (max-width:768px) {
+      .hero h1 { font-size:32px; }
+      .stats { grid-template-columns:repeat(2,1fr); }
+      .contact-grid { grid-template-columns:1fr; }
+    }
+  </style>
+</head>
+<body>
+<div class="bg-animated"></div><div class="bg-grid"></div><div class="bg-glow"></div>
+
+<header>
+  <div class="container">
+    <a href="#" class="logo">企业<span>官网</span><span style="font-size:12px;color:var(--text-muted);margin-left:6px">专业版</span></a>
+    <nav>
+      <a href="https://openai2000.cn" target="_blank" style="border:1px solid var(--primary-light);color:var(--primary-light);padding:4px 12px;border-radius:6px;" data-lkey="back_home">↩ 返回官网</a>
+      <div class="lang-switch">
+        <button class="active" onclick="switchLang('zh')">🇨🇳 中文</button>
+        <button onclick="switchLang('en')">🇺🇸 EN</button>
+      </div>
+      <a href="#" class="active" data-lkey="nav_home">首页</a>
+      <a href="#services" data-lkey="nav_services">服务</a>
+      <a href="#blog" data-lkey="nav_blog">博客</a>
+      <a href="#about" data-lkey="nav_about">关于</a>
+      <a href="#contact" data-lkey="nav_contact">联系</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="container">
+    <div class="hero-badge" data-lkey="hero_badge">🔥 专业版 - 更多功能</div>
+    <h1 data-lkey="hero_title">打造专业级<br><span>企业数字品牌</span></h1>
+    <p data-lkey="hero_desc">响应式设计 · 博客系统 · 多语言支持 · 在线咨询 · 源码交付</p>
+    <a href="#services" class="btn btn-primary" data-lkey="hero_btn">了解更多</a>
+  </div>
+</section>
+
+<section id="services">
+  <div class="container">
+    <div class="section-title">
+      <h2 data-lkey="svc_title">核心服务</h2>
+      <p data-lkey="svc_desc">全面升级的品牌展示解决方案</p>
+    </div>
+    <div class="services-grid">
+      <div class="service-card">
+        <div class="service-icon">🌐</div>
+        <h3 data-lkey="svc1_title">品牌官网建设</h3>
+        <p data-lkey="svc1_desc">10+核心页面，覆盖品牌展示、产品介绍、新闻动态、联系方式等全部场景</p>
+      </div>
+      <div class="service-card">
+        <div class="service-icon">📝</div>
+        <h3 data-lkey="svc2_title">博客系统</h3>
+        <p data-lkey="svc2_desc">完整的博客文章管理，支持分类、标签、搜索，助力内容营销和SEO</p>
+      </div>
+      <div class="service-card">
+        <div class="service-icon">💬</div>
+        <h3 data-lkey="svc3_title">在线咨询</h3>
+        <p data-lkey="svc3_desc">右下角悬浮在线客服，访客可实时咨询，支持自动回复和留言</p>
+      </div>
+      <div class="service-card">
+        <div class="service-icon">🌍</div>
+        <h3 data-lkey="svc4_title">多语言支持</h3>
+        <p data-lkey="svc4_desc">一键切换中英文，轻松拓展国际市场，满足外企和跨境业务展示需求</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="blog" style="background:rgba(79,70,229,.03)">
+  <div class="container">
+    <div class="section-title">
+      <h2 data-lkey="blog_title">资讯博客</h2>
+      <p data-lkey="blog_desc">最新行业动态与技术分享</p>
+    </div>
+    <div class="blog-grid">
+      <div class="blog-card">
+        <div class="blog-img">🚀</div>
+        <div class="blog-body">
+          <div class="blog-meta">📅 2026-06-15 · <span class="blog-tag">行业动态</span><span class="blog-tag">AI</span></div>
+          <h3 data-lkey="blog1_title">AI时代的企业数字化转型趋势</h3>
+          <p data-lkey="blog1_desc">深入分析2026年企业数字化转型的关键趋势，以及如何利用AI技术提升业务效率。</p>
+          <a href="#" class="btn btn-primary btn-sm">阅读更多</a>
+        </div>
+      </div>
+      <div class="blog-card">
+        <div class="blog-img">🎨</div>
+        <div class="blog-body">
+          <div class="blog-meta">📅 2026-05-28 · <span class="blog-tag">设计</span></div>
+          <h3 data-lkey="blog2_title">2026年网页设计流行趋势报告</h3>
+          <p data-lkey="blog2_desc">暗色模式、玻璃态设计、微交互动画——最新网页设计趋势全解析。</p>
+          <a href="#" class="btn btn-primary btn-sm">阅读更多</a>
+        </div>
+      </div>
+      <div class="blog-card">
+        <div class="blog-img">⚡</div>
+        <div class="blog-body">
+          <div class="blog-meta">📅 2026-04-10 · <span class="blog-tag">技术</span></div>
+          <h3 data-lkey="blog3_title">网站性能优化实战指南</h3>
+          <p data-lkey="blog3_desc">从加载速度、代码压缩、缓存策略等方面入手，全面提升网站性能表现。</p>
+          <a href="#" class="btn btn-primary btn-sm">阅读更多</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="about">
+  <div class="container">
+    <div class="section-title">
+      <h2 data-lkey="about_title">关于我们</h2>
+      <p data-lkey="about_desc">用专业和匠心，成就每一个品牌</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="stat-num">120+</div><div class="stat-label" data-lkey="stat01">服务客户</div></div>
+      <div class="stat"><div class="stat-num">200+</div><div class="stat-label" data-lkey="stat02">成功案例</div></div>
+      <div class="stat"><div class="stat-num">8年+</div><div class="stat-label" data-lkey="stat03">行业经验</div></div>
+      <div class="stat"><div class="stat-num">99%</div><div class="stat-label" data-lkey="stat04">客户满意度</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="contact" style="background:rgba(79,70,229,.03)">
+  <div class="container">
+    <div class="section-title">
+      <h2 data-lkey="contact_title">联系我们</h2>
+      <p data-lkey="contact_desc">期待与您的合作</p>
+    </div>
+    <div class="contact-grid">
+      <div class="contact-info">
+        <p><strong>📞 电话：</strong>151-6528-0518</p>
+        <p><strong>📧 邮箱：</strong>contact@example.com</p>
+        <p><strong>💬 微信：</strong>bbks201805</p>
+        <p><strong>📍 地址：</strong>山东省青岛市胶州市阜安街道东关大街8号中央公园写字楼11楼</p>
+        <p style="margin-top:16px;color:var(--text-muted)">点击右下角 💬 图标可直接在线咨询我们</p>
+      </div>
+      <form class="contact-form" onsubmit="event.preventDefault();alert('感谢咨询！我们会尽快与您联系。')">
+        <input type="text" placeholder="您的姓名" required>
+        <input type="tel" placeholder="联系电话" required>
+        <textarea placeholder="请描述您的需求..." required></textarea>
+        <button type="submit" class="btn btn-primary" style="width:100%">提交咨询</button>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <p>© 2026 企业官网专业版模板 · 汇智云码科技出品 · 鲁ICP备2026038130号</p>
+  </div>
+</footer>
+
+<!-- Online Chat Widget -->
+<div class="chat-widget">
+  <div class="chat-box" id="chatBox">
+    <div class="chat-header">
+      <span>💬 在线客服</span>
+      <button class="chat-close" onclick="toggleChat()">✕</button>
+    </div>
+    <div class="chat-msgs" id="chatMsgs">
+      <div class="chat-msg bot"><p>您好！欢迎来到企业官网，有什么可以帮助您的？</p><div class="time">刚刚</div></div>
+    </div>
+    <div class="chat-input-wrap">
+      <input type="text" id="chatInput" placeholder="输入消息..." onkeypress="if(event.key==='Enter')sendMsg()">
+      <button onclick="sendMsg()">发送</button>
+    </div>
+  </div>
+  <button class="chat-btn" onclick="toggleChat()">💬</button>
+</div>
+
+<script>
+// Online Chat
+function toggleChat() { document.getElementById('chatBox').classList.toggle('open'); }
+function sendMsg() {
+  const input = document.getElementById('chatInput');
+  if(!input.value.trim()) return;
+  const box = document.getElementById('chatMsgs');
+  box.innerHTML += '<div class="chat-msg user"><p>'+input.value+'</p><div class="time">刚刚</div></div>';
+  input.value = '';
+  setTimeout(()=>{
+    box.innerHTML += '<div class="chat-msg bot"><p>感谢您的咨询！我们的客服将在工作时间内尽快回复您。您也可以直接拨打 151-6528-0518。</p><div class="time">刚刚</div></div>';
+    box.scrollTop = box.scrollHeight;
+  },800);
+  box.scrollTop = box.scrollHeight;
+}
+
+// Multi-language
+const langData = {
+  zh: {
+    nav_home:'首页', nav_services:'服务', nav_blog:'博客', nav_about:'关于', nav_contact:'联系', back_home:'↩ 返回官网',
+    hero_badge:'🔥 专业版 - 更多功能',
+    hero_title:'打造专业级<br><span>企业数字品牌</span>',
+    hero_desc:'响应式设计 · 博客系统 · 多语言支持 · 在线咨询 · 源码交付',
+    hero_btn:'了解更多',
+    svc_title:'核心服务', svc_desc:'全面升级的品牌展示解决方案',
+    svc1_title:'品牌官网建设', svc1_desc:'10+核心页面，覆盖品牌展示、产品介绍、新闻动态、联系方式等全部场景',
+    svc2_title:'博客系统', svc2_desc:'完整的博客文章管理，支持分类、标签、搜索，助力内容营销和SEO',
+    svc3_title:'在线咨询', svc3_desc:'右下角悬浮在线客服，访客可实时咨询，支持自动回复和留言',
+    svc4_title:'多语言支持', svc4_desc:'一键切换中英文，轻松拓展国际市场，满足外企和跨境业务展示需求',
+    blog_title:'资讯博客', blog_desc:'最新行业动态与技术分享',
+    blog1_title:'AI时代的企业数字化转型趋势', blog1_desc:'深入分析2026年企业数字化转型的关键趋势，以及如何利用AI技术提升业务效率。',
+    blog2_title:'2026年网页设计流行趋势报告', blog2_desc:'暗色模式、玻璃态设计、微交互动画——最新网页设计趋势全解析。',
+    blog3_title:'网站性能优化实战指南', blog3_desc:'从加载速度、代码压缩、缓存策略等方面入手，全面提升网站性能表现。',
+    about_title:'关于我们', about_desc:'用专业和匠心，成就每一个品牌',
+    stat01:'服务客户', stat02:'成功案例', stat03:'行业经验', stat04:'客户满意度',
+    contact_title:'联系我们', contact_desc:'期待与您的合作',
+  },
+  en: {
+    nav_home:'Home', nav_services:'Services', nav_blog:'Blog', nav_about:'About', nav_contact:'Contact', back_home:'↩ Back to Site',
+    hero_badge:'🔥 Pro - More Features',
+    hero_title:'Build a Professional<br><span>Enterprise Digital Brand</span>',
+    hero_desc:'Responsive · Blog · Multi-language · Live Chat · Source Code',
+    hero_btn:'Learn More',
+    svc_title:'Core Services', svc_desc:'Upgraded Brand Display Solutions',
+    svc1_title:'Website Building', svc1_desc:'10+ pages covering brand showcase, products, news, and contact',
+    svc2_title:'Blog System', svc2_desc:'Full blog management with categories, tags, search for content marketing',
+    svc3_title:'Live Chat', svc3_desc:'Floating online customer service widget with auto-reply support',
+    svc4_title:'Multi-language', svc4_desc:'One-click switch between Chinese and English for global audience',
+    blog_title:'Blog', blog_desc:'Latest industry news and tech sharing',
+    blog1_title:'AI-driven Digital Transformation Trends', blog1_desc:'Analysis of key 2026 enterprise digital transformation trends.',
+    blog2_title:'2026 Web Design Trends', blog2_desc:'Dark mode, glassmorphism, micro-interactions — the latest trends.',
+    blog3_title:'Web Performance Optimization Guide', blog3_desc:'Speed, compression, caching strategies to boost performance.',
+    about_title:'About Us', about_desc:'Professionalism and craftsmanship for every brand',
+    stat01:'Clients', stat02:'Projects', stat03:'Experience', stat04:'Satisfaction',
+    contact_title:'Contact Us', contact_desc:'Looking forward to working with you',
+  }
+};
+let currentLang = 'zh';
+function switchLang(lang) {
+  currentLang = lang;
+  document.querySelectorAll('.lang-switch button').forEach(b=>b.classList.toggle('active',b.textContent.includes(lang==='zh'?'中文':'EN')));
+  const data = langData[lang];
+  document.querySelectorAll('[data-lkey]').forEach(el => {
+    const key = el.dataset.lkey;
+    if(data[key]) el.innerHTML = data[key];
+  });
+}
+</script>
+</body>
+</html>

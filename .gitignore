@@ -1,0 +1,36 @@
+# === 明文敏感文件（绝不入库）===
+_local-secrets/
+*.env
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# === 依赖与构建产物 ===
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+.cache/
+__pycache__/
+*.pyc
+*.pyo
+
+# === 服务器备份 / 日志 ===
+*.bak
+*.bak_*
+*.bak.*
+*.log
+*.log.*
+*.old
+
+# === 本地临时 ===
+.tmp/
+*.tar
+*.tar.gz
+*.tgz
+*.zip.tmp
+_private_src/

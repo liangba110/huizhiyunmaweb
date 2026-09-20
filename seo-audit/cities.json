@@ -1,0 +1,1404 @@
+{
+  "provinces": [
+    {
+      "name": "北京市",
+      "subdomain": "beijing",
+      "cities": [
+        {
+          "name": "北京",
+          "subdomain": "beijing"
+        }
+      ]
+    },
+    {
+      "name": "天津市",
+      "subdomain": "tianjin",
+      "cities": [
+        {
+          "name": "天津",
+          "subdomain": "tianjin"
+        }
+      ]
+    },
+    {
+      "name": "上海市",
+      "subdomain": "shanghai",
+      "cities": [
+        {
+          "name": "上海",
+          "subdomain": "shanghai"
+        }
+      ]
+    },
+    {
+      "name": "重庆市",
+      "subdomain": "chongqing",
+      "cities": [
+        {
+          "name": "重庆",
+          "subdomain": "chongqing"
+        }
+      ]
+    },
+    {
+      "name": "河北省",
+      "subdomain": "hebei",
+      "cities": [
+        {
+          "name": "石家庄",
+          "subdomain": "shijiazhuang"
+        },
+        {
+          "name": "唐山",
+          "subdomain": "tangshan"
+        },
+        {
+          "name": "秦皇岛",
+          "subdomain": "qinhuangdao"
+        },
+        {
+          "name": "邯郸",
+          "subdomain": "handan"
+        },
+        {
+          "name": "邢台",
+          "subdomain": "xingtai"
+        },
+        {
+          "name": "保定",
+          "subdomain": "baoding"
+        },
+        {
+          "name": "张家口",
+          "subdomain": "zhangjiakou"
+        },
+        {
+          "name": "承德",
+          "subdomain": "chengde"
+        },
+        {
+          "name": "沧州",
+          "subdomain": "cangzhou"
+        },
+        {
+          "name": "廊坊",
+          "subdomain": "langfang"
+        },
+        {
+          "name": "衡水",
+          "subdomain": "hengshui"
+        }
+      ]
+    },
+    {
+      "name": "山西省",
+      "subdomain": "shanxi",
+      "cities": [
+        {
+          "name": "太原",
+          "subdomain": "taiyuan"
+        },
+        {
+          "name": "大同",
+          "subdomain": "datong"
+        },
+        {
+          "name": "阳泉",
+          "subdomain": "yangquan"
+        },
+        {
+          "name": "长治",
+          "subdomain": "changzhi"
+        },
+        {
+          "name": "晋城",
+          "subdomain": "jincheng"
+        },
+        {
+          "name": "朔州",
+          "subdomain": "shuozhou"
+        },
+        {
+          "name": "晋中",
+          "subdomain": "jinzhong"
+        },
+        {
+          "name": "运城",
+          "subdomain": "yuncheng"
+        },
+        {
+          "name": "忻州",
+          "subdomain": "xinzhou"
+        },
+        {
+          "name": "临汾",
+          "subdomain": "linfen"
+        },
+        {
+          "name": "吕梁",
+          "subdomain": "lvliang"
+        }
+      ]
+    },
+    {
+      "name": "内蒙古自治区",
+      "subdomain": "neimenggu",
+      "cities": [
+        {
+          "name": "呼和浩特",
+          "subdomain": "huhehaote"
+        },
+        {
+          "name": "包头",
+          "subdomain": "baotou"
+        },
+        {
+          "name": "乌海",
+          "subdomain": "wuhai"
+        },
+        {
+          "name": "赤峰",
+          "subdomain": "chifeng"
+        },
+        {
+          "name": "通辽",
+          "subdomain": "tongliao"
+        },
+        {
+          "name": "鄂尔多斯",
+          "subdomain": "eerduosi"
+        },
+        {
+          "name": "呼伦贝尔",
+          "subdomain": "hulunbeier"
+        },
+        {
+          "name": "巴彦淖尔",
+          "subdomain": "bayannaoer"
+        },
+        {
+          "name": "乌兰察布",
+          "subdomain": "wulanchabu"
+        }
+      ]
+    },
+    {
+      "name": "辽宁省",
+      "subdomain": "liaoning",
+      "cities": [
+        {
+          "name": "沈阳",
+          "subdomain": "shenyang"
+        },
+        {
+          "name": "大连",
+          "subdomain": "dalian"
+        },
+        {
+          "name": "鞍山",
+          "subdomain": "anshan"
+        },
+        {
+          "name": "抚顺",
+          "subdomain": "fushun"
+        },
+        {
+          "name": "本溪",
+          "subdomain": "benxi"
+        },
+        {
+          "name": "丹东",
+          "subdomain": "dandong"
+        },
+        {
+          "name": "锦州",
+          "subdomain": "jinzhou"
+        },
+        {
+          "name": "营口",
+          "subdomain": "yingkou"
+        },
+        {
+          "name": "阜新",
+          "subdomain": "fuxin"
+        },
+        {
+          "name": "辽阳",
+          "subdomain": "liaoyang"
+        },
+        {
+          "name": "盘锦",
+          "subdomain": "panjin"
+        },
+        {
+          "name": "铁岭",
+          "subdomain": "tieling"
+        },
+        {
+          "name": "朝阳",
+          "subdomain": "chaoyang"
+        },
+        {
+          "name": "葫芦岛",
+          "subdomain": "huludao"
+        }
+      ]
+    },
+    {
+      "name": "吉林省",
+      "subdomain": "jilin",
+      "cities": [
+        {
+          "name": "长春",
+          "subdomain": "changchun"
+        },
+        {
+          "name": "吉林",
+          "subdomain": "jilin"
+        },
+        {
+          "name": "四平",
+          "subdomain": "siping"
+        },
+        {
+          "name": "辽源",
+          "subdomain": "liaoyuan"
+        },
+        {
+          "name": "通化",
+          "subdomain": "tonghua"
+        },
+        {
+          "name": "白山",
+          "subdomain": "baishan"
+        },
+        {
+          "name": "松原",
+          "subdomain": "songyuan"
+        },
+        {
+          "name": "白城",
+          "subdomain": "baicheng"
+        }
+      ]
+    },
+    {
+      "name": "黑龙江省",
+      "subdomain": "heilongjiang",
+      "cities": [
+        {
+          "name": "哈尔滨",
+          "subdomain": "haerbin"
+        },
+        {
+          "name": "齐齐哈尔",
+          "subdomain": "qiqihaer"
+        },
+        {
+          "name": "鸡西",
+          "subdomain": "jixi"
+        },
+        {
+          "name": "鹤岗",
+          "subdomain": "hegang"
+        },
+        {
+          "name": "双鸭山",
+          "subdomain": "shuangyashan"
+        },
+        {
+          "name": "大庆",
+          "subdomain": "daqing"
+        },
+        {
+          "name": "伊春",
+          "subdomain": "yichun-hlj"
+        },
+        {
+          "name": "佳木斯",
+          "subdomain": "jiamusi"
+        },
+        {
+          "name": "七台河",
+          "subdomain": "qitaihe"
+        },
+        {
+          "name": "牡丹江",
+          "subdomain": "mudanjiang"
+        },
+        {
+          "name": "黑河",
+          "subdomain": "heihe"
+        },
+        {
+          "name": "绥化",
+          "subdomain": "suihua"
+        }
+      ]
+    },
+    {
+      "name": "江苏省",
+      "subdomain": "jiangsu",
+      "cities": [
+        {
+          "name": "南京",
+          "subdomain": "nanjing"
+        },
+        {
+          "name": "无锡",
+          "subdomain": "wuxi"
+        },
+        {
+          "name": "徐州",
+          "subdomain": "xuzhou"
+        },
+        {
+          "name": "常州",
+          "subdomain": "changzhou"
+        },
+        {
+          "name": "苏州",
+          "subdomain": "suzhou"
+        },
+        {
+          "name": "南通",
+          "subdomain": "nantong"
+        },
+        {
+          "name": "连云港",
+          "subdomain": "lianyungang"
+        },
+        {
+          "name": "淮安",
+          "subdomain": "huaian"
+        },
+        {
+          "name": "盐城",
+          "subdomain": "yancheng"
+        },
+        {
+          "name": "扬州",
+          "subdomain": "yangzhou"
+        },
+        {
+          "name": "镇江",
+          "subdomain": "zhenjiang"
+        },
+        {
+          "name": "泰州",
+          "subdomain": "taizhou-js"
+        },
+        {
+          "name": "宿迁",
+          "subdomain": "suqian"
+        }
+      ]
+    },
+    {
+      "name": "浙江省",
+      "subdomain": "zhejiang",
+      "cities": [
+        {
+          "name": "杭州",
+          "subdomain": "hangzhou"
+        },
+        {
+          "name": "宁波",
+          "subdomain": "ningbo"
+        },
+        {
+          "name": "温州",
+          "subdomain": "wenzhou"
+        },
+        {
+          "name": "嘉兴",
+          "subdomain": "jiaxing"
+        },
+        {
+          "name": "湖州",
+          "subdomain": "huzhou"
+        },
+        {
+          "name": "绍兴",
+          "subdomain": "shaoxing"
+        },
+        {
+          "name": "金华",
+          "subdomain": "jinhua"
+        },
+        {
+          "name": "衢州",
+          "subdomain": "quzhou"
+        },
+        {
+          "name": "舟山",
+          "subdomain": "zhoushan"
+        },
+        {
+          "name": "台州",
+          "subdomain": "taizhou"
+        },
+        {
+          "name": "丽水",
+          "subdomain": "lishui"
+        }
+      ]
+    },
+    {
+      "name": "安徽省",
+      "subdomain": "anhui",
+      "cities": [
+        {
+          "name": "合肥",
+          "subdomain": "hefei"
+        },
+        {
+          "name": "芜湖",
+          "subdomain": "wuhu"
+        },
+        {
+          "name": "蚌埠",
+          "subdomain": "bengbu"
+        },
+        {
+          "name": "淮南",
+          "subdomain": "huainan"
+        },
+        {
+          "name": "马鞍山",
+          "subdomain": "maanshan"
+        },
+        {
+          "name": "淮北",
+          "subdomain": "huaibei"
+        },
+        {
+          "name": "铜陵",
+          "subdomain": "tongling"
+        },
+        {
+          "name": "安庆",
+          "subdomain": "anqing"
+        },
+        {
+          "name": "黄山",
+          "subdomain": "huangshan"
+        },
+        {
+          "name": "滁州",
+          "subdomain": "chuzhou"
+        },
+        {
+          "name": "阜阳",
+          "subdomain": "fuyang"
+        },
+        {
+          "name": "宿州",
+          "subdomain": "suzhou-ah"
+        },
+        {
+          "name": "六安",
+          "subdomain": "luan"
+        },
+        {
+          "name": "亳州",
+          "subdomain": "bozhou"
+        },
+        {
+          "name": "池州",
+          "subdomain": "chizhou"
+        },
+        {
+          "name": "宣城",
+          "subdomain": "xuancheng"
+        }
+      ]
+    },
+    {
+      "name": "福建省",
+      "subdomain": "fujian",
+      "cities": [
+        {
+          "name": "福州",
+          "subdomain": "fuzhou"
+        },
+        {
+          "name": "厦门",
+          "subdomain": "xiamen"
+        },
+        {
+          "name": "莆田",
+          "subdomain": "putian"
+        },
+        {
+          "name": "三明",
+          "subdomain": "sanming"
+        },
+        {
+          "name": "泉州",
+          "subdomain": "quanzhou"
+        },
+        {
+          "name": "漳州",
+          "subdomain": "zhangzhou"
+        },
+        {
+          "name": "南平",
+          "subdomain": "nanping"
+        },
+        {
+          "name": "龙岩",
+          "subdomain": "longyan"
+        },
+        {
+          "name": "宁德",
+          "subdomain": "ningde"
+        }
+      ]
+    },
+    {
+      "name": "江西省",
+      "subdomain": "jiangxi",
+      "cities": [
+        {
+          "name": "南昌",
+          "subdomain": "nanchang"
+        },
+        {
+          "name": "景德镇",
+          "subdomain": "jingdezhen"
+        },
+        {
+          "name": "萍乡",
+          "subdomain": "pingxiang"
+        },
+        {
+          "name": "九江",
+          "subdomain": "jiujiang"
+        },
+        {
+          "name": "新余",
+          "subdomain": "xinyu"
+        },
+        {
+          "name": "鹰潭",
+          "subdomain": "yingtan"
+        },
+        {
+          "name": "赣州",
+          "subdomain": "ganzhou"
+        },
+        {
+          "name": "吉安",
+          "subdomain": "jian"
+        },
+        {
+          "name": "宜春",
+          "subdomain": "yichun"
+        },
+        {
+          "name": "抚州",
+          "subdomain": "fuzhou-jx"
+        },
+        {
+          "name": "上饶",
+          "subdomain": "shangrao"
+        }
+      ]
+    },
+    {
+      "name": "山东省",
+      "subdomain": "shandong",
+      "cities": [
+        {
+          "name": "济南",
+          "subdomain": "jinan"
+        },
+        {
+          "name": "青岛",
+          "subdomain": "qingdao"
+        },
+        {
+          "name": "淄博",
+          "subdomain": "zibo"
+        },
+        {
+          "name": "枣庄",
+          "subdomain": "zaozhuang"
+        },
+        {
+          "name": "东营",
+          "subdomain": "dongying"
+        },
+        {
+          "name": "烟台",
+          "subdomain": "yantai"
+        },
+        {
+          "name": "潍坊",
+          "subdomain": "weifang"
+        },
+        {
+          "name": "济宁",
+          "subdomain": "jining"
+        },
+        {
+          "name": "泰安",
+          "subdomain": "taian"
+        },
+        {
+          "name": "威海",
+          "subdomain": "weihai"
+        },
+        {
+          "name": "日照",
+          "subdomain": "rizhao"
+        },
+        {
+          "name": "临沂",
+          "subdomain": "linyi"
+        },
+        {
+          "name": "德州",
+          "subdomain": "dezhou"
+        },
+        {
+          "name": "聊城",
+          "subdomain": "liaocheng"
+        },
+        {
+          "name": "滨州",
+          "subdomain": "binzhou"
+        },
+        {
+          "name": "菏泽",
+          "subdomain": "heze"
+        }
+      ]
+    },
+    {
+      "name": "河南省",
+      "subdomain": "henan",
+      "cities": [
+        {
+          "name": "郑州",
+          "subdomain": "zhengzhou"
+        },
+        {
+          "name": "开封",
+          "subdomain": "kaifeng"
+        },
+        {
+          "name": "洛阳",
+          "subdomain": "luoyang"
+        },
+        {
+          "name": "平顶山",
+          "subdomain": "pingdingshan"
+        },
+        {
+          "name": "安阳",
+          "subdomain": "anyang"
+        },
+        {
+          "name": "新乡",
+          "subdomain": "xinxiang"
+        },
+        {
+          "name": "焦作",
+          "subdomain": "jiaozuo"
+        },
+        {
+          "name": "濮阳",
+          "subdomain": "puyang"
+        },
+        {
+          "name": "许昌",
+          "subdomain": "xuchang"
+        },
+        {
+          "name": "漯河",
+          "subdomain": "luohe"
+        },
+        {
+          "name": "三门峡",
+          "subdomain": "sanmenxia"
+        },
+        {
+          "name": "南阳",
+          "subdomain": "nanyang"
+        },
+        {
+          "name": "商丘",
+          "subdomain": "shangqiu"
+        },
+        {
+          "name": "信阳",
+          "subdomain": "xinyang"
+        },
+        {
+          "name": "周口",
+          "subdomain": "zhoukou"
+        },
+        {
+          "name": "驻马店",
+          "subdomain": "zhumadian"
+        }
+      ]
+    },
+    {
+      "name": "湖北省",
+      "subdomain": "hubei",
+      "cities": [
+        {
+          "name": "武汉",
+          "subdomain": "wuhan"
+        },
+        {
+          "name": "黄石",
+          "subdomain": "huangshi"
+        },
+        {
+          "name": "十堰",
+          "subdomain": "shiyan"
+        },
+        {
+          "name": "宜昌",
+          "subdomain": "yichang"
+        },
+        {
+          "name": "襄阳",
+          "subdomain": "xiangyang"
+        },
+        {
+          "name": "鄂州",
+          "subdomain": "ezhou"
+        },
+        {
+          "name": "荆门",
+          "subdomain": "jingmen"
+        },
+        {
+          "name": "孝感",
+          "subdomain": "xiaogan"
+        },
+        {
+          "name": "荆州",
+          "subdomain": "jingzhou"
+        },
+        {
+          "name": "黄冈",
+          "subdomain": "huanggang"
+        },
+        {
+          "name": "咸宁",
+          "subdomain": "xianning"
+        },
+        {
+          "name": "随州",
+          "subdomain": "suizhou"
+        }
+      ]
+    },
+    {
+      "name": "湖南省",
+      "subdomain": "hunan",
+      "cities": [
+        {
+          "name": "长沙",
+          "subdomain": "changsha"
+        },
+        {
+          "name": "株洲",
+          "subdomain": "zhuzhou"
+        },
+        {
+          "name": "湘潭",
+          "subdomain": "xiangtan"
+        },
+        {
+          "name": "衡阳",
+          "subdomain": "hengyang"
+        },
+        {
+          "name": "邵阳",
+          "subdomain": "shaoyang"
+        },
+        {
+          "name": "岳阳",
+          "subdomain": "yueyang"
+        },
+        {
+          "name": "常德",
+          "subdomain": "changde"
+        },
+        {
+          "name": "张家界",
+          "subdomain": "zhangjiajie"
+        },
+        {
+          "name": "益阳",
+          "subdomain": "yiyang"
+        },
+        {
+          "name": "郴州",
+          "subdomain": "chenzhou"
+        },
+        {
+          "name": "永州",
+          "subdomain": "yongzhou"
+        },
+        {
+          "name": "怀化",
+          "subdomain": "huaihua"
+        },
+        {
+          "name": "娄底",
+          "subdomain": "loudi"
+        }
+      ]
+    },
+    {
+      "name": "广东省",
+      "subdomain": "guangdong",
+      "cities": [
+        {
+          "name": "广州",
+          "subdomain": "guangzhou"
+        },
+        {
+          "name": "韶关",
+          "subdomain": "shaoguan"
+        },
+        {
+          "name": "深圳",
+          "subdomain": "shenzhen"
+        },
+        {
+          "name": "珠海",
+          "subdomain": "zhuhai"
+        },
+        {
+          "name": "汕头",
+          "subdomain": "shantou"
+        },
+        {
+          "name": "佛山",
+          "subdomain": "foshan"
+        },
+        {
+          "name": "江门",
+          "subdomain": "jiangmen"
+        },
+        {
+          "name": "湛江",
+          "subdomain": "zhanjiang"
+        },
+        {
+          "name": "茂名",
+          "subdomain": "maoming"
+        },
+        {
+          "name": "肇庆",
+          "subdomain": "zhaoqing"
+        },
+        {
+          "name": "惠州",
+          "subdomain": "huizhou"
+        },
+        {
+          "name": "梅州",
+          "subdomain": "meizhou"
+        },
+        {
+          "name": "汕尾",
+          "subdomain": "shanwei"
+        },
+        {
+          "name": "河源",
+          "subdomain": "heyuan"
+        },
+        {
+          "name": "阳江",
+          "subdomain": "yangjiang"
+        },
+        {
+          "name": "清远",
+          "subdomain": "qingyuan"
+        },
+        {
+          "name": "东莞",
+          "subdomain": "dongguan"
+        },
+        {
+          "name": "中山",
+          "subdomain": "zhongshan"
+        },
+        {
+          "name": "潮州",
+          "subdomain": "chaozhou"
+        },
+        {
+          "name": "揭阳",
+          "subdomain": "jieyang"
+        },
+        {
+          "name": "云浮",
+          "subdomain": "yunfu"
+        }
+      ]
+    },
+    {
+      "name": "广西壮族自治区",
+      "subdomain": "guangxi",
+      "cities": [
+        {
+          "name": "南宁",
+          "subdomain": "nanning"
+        },
+        {
+          "name": "柳州",
+          "subdomain": "liuzhou"
+        },
+        {
+          "name": "桂林",
+          "subdomain": "guilin"
+        },
+        {
+          "name": "梧州",
+          "subdomain": "wuzhou"
+        },
+        {
+          "name": "北海",
+          "subdomain": "beihai"
+        },
+        {
+          "name": "防城港",
+          "subdomain": "fangchenggang"
+        },
+        {
+          "name": "钦州",
+          "subdomain": "qinzhou"
+        },
+        {
+          "name": "贵港",
+          "subdomain": "guigang"
+        },
+        {
+          "name": "玉林",
+          "subdomain": "yulin-gx"
+        },
+        {
+          "name": "百色",
+          "subdomain": "baise"
+        },
+        {
+          "name": "贺州",
+          "subdomain": "hezhou"
+        },
+        {
+          "name": "河池",
+          "subdomain": "hechi"
+        },
+        {
+          "name": "来宾",
+          "subdomain": "laibin"
+        },
+        {
+          "name": "崇左",
+          "subdomain": "chongzuo"
+        }
+      ]
+    },
+    {
+      "name": "海南省",
+      "subdomain": "hainan",
+      "cities": [
+        {
+          "name": "海口",
+          "subdomain": "haikou"
+        },
+        {
+          "name": "三亚",
+          "subdomain": "sanya"
+        },
+        {
+          "name": "三沙",
+          "subdomain": "sansha"
+        },
+        {
+          "name": "儋州",
+          "subdomain": "danzhou"
+        }
+      ]
+    },
+    {
+      "name": "四川省",
+      "subdomain": "sichuan",
+      "cities": [
+        {
+          "name": "成都",
+          "subdomain": "chengdu"
+        },
+        {
+          "name": "自贡",
+          "subdomain": "zigong"
+        },
+        {
+          "name": "攀枝花",
+          "subdomain": "panzhihua"
+        },
+        {
+          "name": "泸州",
+          "subdomain": "luzhou"
+        },
+        {
+          "name": "德阳",
+          "subdomain": "deyang"
+        },
+        {
+          "name": "绵阳",
+          "subdomain": "mianyang"
+        },
+        {
+          "name": "广元",
+          "subdomain": "guangyuan"
+        },
+        {
+          "name": "遂宁",
+          "subdomain": "suining"
+        },
+        {
+          "name": "内江",
+          "subdomain": "neijiang"
+        },
+        {
+          "name": "乐山",
+          "subdomain": "leshan"
+        },
+        {
+          "name": "南充",
+          "subdomain": "nanchong"
+        },
+        {
+          "name": "眉山",
+          "subdomain": "meishan"
+        },
+        {
+          "name": "宜宾",
+          "subdomain": "yibin"
+        },
+        {
+          "name": "广安",
+          "subdomain": "guangan"
+        },
+        {
+          "name": "达州",
+          "subdomain": "dazhou"
+        },
+        {
+          "name": "雅安",
+          "subdomain": "yaan"
+        },
+        {
+          "name": "巴中",
+          "subdomain": "bazhong"
+        },
+        {
+          "name": "资阳",
+          "subdomain": "ziyang"
+        }
+      ]
+    },
+    {
+      "name": "贵州省",
+      "subdomain": "guizhou",
+      "cities": [
+        {
+          "name": "贵阳",
+          "subdomain": "guiyang"
+        },
+        {
+          "name": "六盘水",
+          "subdomain": "liupanshui"
+        },
+        {
+          "name": "遵义",
+          "subdomain": "zunyi"
+        },
+        {
+          "name": "安顺",
+          "subdomain": "anshun"
+        },
+        {
+          "name": "毕节",
+          "subdomain": "bijie"
+        },
+        {
+          "name": "铜仁",
+          "subdomain": "tongren"
+        }
+      ]
+    },
+    {
+      "name": "云南省",
+      "subdomain": "yunnan",
+      "cities": [
+        {
+          "name": "昆明",
+          "subdomain": "kunming"
+        },
+        {
+          "name": "曲靖",
+          "subdomain": "qujing"
+        },
+        {
+          "name": "玉溪",
+          "subdomain": "yuxi"
+        },
+        {
+          "name": "保山",
+          "subdomain": "baoshan"
+        },
+        {
+          "name": "昭通",
+          "subdomain": "zhaotong"
+        },
+        {
+          "name": "丽江",
+          "subdomain": "lijiang"
+        },
+        {
+          "name": "普洱",
+          "subdomain": "puer"
+        },
+        {
+          "name": "临沧",
+          "subdomain": "lincang"
+        }
+      ]
+    },
+    {
+      "name": "西藏自治区",
+      "subdomain": "xizang",
+      "cities": [
+        {
+          "name": "拉萨",
+          "subdomain": "lasa"
+        },
+        {
+          "name": "日喀则",
+          "subdomain": "rikaze"
+        },
+        {
+          "name": "昌都",
+          "subdomain": "changdu"
+        },
+        {
+          "name": "林芝",
+          "subdomain": "linzhi"
+        }
+      ]
+    },
+    {
+      "name": "陕西省",
+      "subdomain": "shaanxi",
+      "cities": [
+        {
+          "name": "西安",
+          "subdomain": "xian"
+        },
+        {
+          "name": "铜川",
+          "subdomain": "tongchuan"
+        },
+        {
+          "name": "宝鸡",
+          "subdomain": "baoji"
+        },
+        {
+          "name": "咸阳",
+          "subdomain": "xianyang"
+        },
+        {
+          "name": "渭南",
+          "subdomain": "weinan"
+        },
+        {
+          "name": "延安",
+          "subdomain": "yanan"
+        },
+        {
+          "name": "汉中",
+          "subdomain": "hanzhong"
+        },
+        {
+          "name": "榆林",
+          "subdomain": "yulin"
+        },
+        {
+          "name": "安康",
+          "subdomain": "ankang"
+        },
+        {
+          "name": "商洛",
+          "subdomain": "shangluo"
+        }
+      ]
+    },
+    {
+      "name": "甘肃省",
+      "subdomain": "gansu",
+      "cities": [
+        {
+          "name": "兰州",
+          "subdomain": "lanzhou"
+        },
+        {
+          "name": "嘉峪关",
+          "subdomain": "jiayuguan"
+        },
+        {
+          "name": "金昌",
+          "subdomain": "jinchang"
+        },
+        {
+          "name": "白银",
+          "subdomain": "baiyin"
+        },
+        {
+          "name": "天水",
+          "subdomain": "tianshui"
+        },
+        {
+          "name": "武威",
+          "subdomain": "wuwei"
+        },
+        {
+          "name": "张掖",
+          "subdomain": "zhangye"
+        },
+        {
+          "name": "平凉",
+          "subdomain": "pingliang"
+        },
+        {
+          "name": "酒泉",
+          "subdomain": "jiuquan"
+        },
+        {
+          "name": "庆阳",
+          "subdomain": "qingyang"
+        },
+        {
+          "name": "定西",
+          "subdomain": "dingxi"
+        },
+        {
+          "name": "陇南",
+          "subdomain": "longnan"
+        }
+      ]
+    },
+    {
+      "name": "青海省",
+      "subdomain": "qinghai",
+      "cities": [
+        {
+          "name": "西宁",
+          "subdomain": "xining"
+        },
+        {
+          "name": "海东",
+          "subdomain": "haidong"
+        }
+      ]
+    },
+    {
+      "name": "宁夏回族自治区",
+      "subdomain": "ningxia",
+      "cities": [
+        {
+          "name": "银川",
+          "subdomain": "yinchuan"
+        },
+        {
+          "name": "石嘴山",
+          "subdomain": "shizuishan"
+        },
+        {
+          "name": "吴忠",
+          "subdomain": "wuzhong"
+        },
+        {
+          "name": "固原",
+          "subdomain": "guyuan"
+        },
+        {
+          "name": "中卫",
+          "subdomain": "zhongwei"
+        }
+      ]
+    },
+    {
+      "name": "新疆维吾尔自治区",
+      "subdomain": "xinjiang",
+      "cities": [
+        {
+          "name": "乌鲁木齐",
+          "subdomain": "wulumuqi"
+        },
+        {
+          "name": "克拉玛依",
+          "subdomain": "kelamayi"
+        },
+        {
+          "name": "吐鲁番",
+          "subdomain": "tulufan"
+        },
+        {
+          "name": "哈密",
+          "subdomain": "hami"
+        }
+      ]
+    },
+    {
+      "name": "台湾省",
+      "subdomain": "taiwan",
+      "cities": [
+        {
+          "name": "台北",
+          "subdomain": "taibei"
+        },
+        {
+          "name": "高雄",
+          "subdomain": "gaoxiong"
+        },
+        {
+          "name": "台中",
+          "subdomain": "taizhong"
+        }
+      ]
+    },
+    {
+      "name": "香港特别行政区",
+      "subdomain": "hongkong",
+      "cities": [
+        {
+          "name": "香港",
+          "subdomain": "hongkong"
+        }
+      ]
+    },
+    {
+      "name": "澳门特别行政区",
+      "subdomain": "aomen",
+      "cities": [
+        {
+          "name": "澳门",
+          "subdomain": "aomen"
+        }
+      ]
+    }
+  ]
+}

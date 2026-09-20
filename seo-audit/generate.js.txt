@@ -1,0 +1,1588 @@
+#!/usr/bin/env node
+/**
+ * 汇智云码科技 - SEO 静态页 + sitemap 生成器
+ * 作用：为纯 SPA 网站生成可被百度/搜索引擎抓取的静态 HTML 页面和 sitemap.xml
+ * 运行：node generate.js   （需在 backend 目录下，读取 .env 连接数据库）
+ */
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+const mysql = require('mysql2/promise');
+const fs = require('fs');
+const path = require('path');
+const { execSync } = require('child_process');
+
+const DIST = path.join(__dirname, '..', '..', 'frontend', 'dist');
+// 自动匹配 vite 构建后的带 hash CSS，避免城市静态页引用已失效的旧 hash 文件
+var MAIN_CSS = (function () {
+  try {
+    var hit = fs.readdirSync(path.join(DIST, 'assets'))
+      .filter(function (name) { return /^index-.*\.css$/.test(name); })
+      .sort().pop();
+    if (hit) return hit;
+  } catch (e) {}
+  return 'index.css';
+})();
+const CASES_IMG_DIR = path.join(DIST, 'seo', 'images', 'cases');
+const CASE_COVER_FONT = '/usr/share/fonts/opentype/noto/NotoSerifCJK-Bold.ttc';
+const SITE = 'https://openai2000.cn';
+const SITE_WWW = 'https://openai2000.cn';
+
+// ---------- 数据库连接（主库） ----------
+async function getPool() {
+  return mysql.createPool({
+    host: process.env.DB_HOST || '127.0.0.1',
+    port: process.env.DB_PORT || 3306,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    charset: 'utf8mb4',
+    connectionLimit: 3,
+  });
+}
+
+// ---------- HTML 转义 ----------
+function esc(s) {
+  return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+function stripHtml(s) {
+  return String(s || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+function trunc(s, n) {
+  if (!s) return '';
+  s = String(s);
+  return s.length > n ? s.slice(0, n) + '…' : s;
+}
+// 截断标题（保留完整词，不超过n个字符）
+function truncTitle(s, n) {
+  if (!s) return '';
+  s = String(s).trim();
+  if (s.length <= n) return s;
+  return s.slice(0, n - 1) + '…';
+}
+function truncHtml(s, n) {
+  if (!s) return '';
+  s = stripHtml(s);
+  return s.length > n ? s.slice(0, n) + '…' : s;
+}
+
+// shell 单引号转义（供 execSync 拼命令使用）
+function shq(s) {
+  return "'" + String(s).replace(/'/g, "'\\''") + "'";
+}
+
+// 页脚备案信息（由主流程从 company_info 注入，供蜘蛛可见）
+let FOOTER_ICP = '';
+let FOOTER_BEIAN = '';
+// 案例总数（由主流程从数据库读取，用于文案中的动态数字）
+let CASES_TOTAL = 0;
+function casesCountText() {
+  return CASES_TOTAL >= 200 ? `${CASES_TOTAL}+` : `${CASES_TOTAL}`;
+}
+// ---------- JSON-LD 结构化数据 ----------
+function getMobile(info) {
+  return (info && (info.company_mobile || info.mobile) || '').trim();
+}
+function maskMobile(m) {
+  return m ? m.slice(0,3) + '-' + m.slice(3,7) + '-' + m.slice(7) : '';
+}
+function orgJsonLd(info) {
+  const name = (info && info.company_name) || '汇智云码科技';
+  const addr = (info && info.company_address) || '';
+  const phone = (info && (info.company_mobile || info.company_phone)) || '';
+  const email = (info && info.company_email) || '';
+  const intro = (info && info.company_intro) ? trunc(info.company_intro, 200) : '';
+  return '<script type="application/ld+json">' + JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Organization',
+    name,
+    url: SITE + '/',
+    logo: SITE + '/favicon.svg',
+    description: intro,
+    address: { '@type': 'PostalAddress', streetAddress: addr, addressCountry: 'CN' },
+    telephone: phone,
+    email,
+  }) + '</script>';
+}
+function articleJsonLd(a) {
+  const url = `${SITE}/articles/${a.id}`;
+  const date = a.published_at ? String(a.published_at).slice(0, 10) : '';
+  return '<script type="application/ld+json">' + JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Article',
+    headline: a.title,
+    description: trunc(a.summary, 160),
+    datePublished: date,
+    dateModified: date,
+    author: { '@type': 'Organization', name: '汇智云码科技' },
+    publisher: { '@type': 'Organization', name: '汇智云码科技', url: SITE + '/' },
+    mainEntityOfPage: url,
+  }) + '</script>' + '\n' + '<script type="application/ld+json">' + JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: [
+      { '@type': 'ListItem', position: 1, name: '首页', item: SITE + '/' },
+      { '@type': 'ListItem', position: 2, name: '资讯', item: SITE + '/articles' },
+      { '@type': 'ListItem', position: 3, name: a.title, item: url },
+    ],
+  }) + '</script>';
+}
+
+// FAQ Schema
+function caseJsonLd(c) {
+  const url = SITE + "/cases/" + c.id;
+  const ld = {
+    "@context": "https://schema.org",
+    "@type": "CreativeWork",
+    name: c.title,
+    description: trunc(c.description, 160),
+    url,
+    genre: c.category || undefined,
+    about: c.technologies || undefined,
+    creator: { "@type": "Organization", name: "汇智云码科技", url: SITE + "/" },
+  };
+  const bc = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "首页", item: SITE + "/" },
+      { "@type": "ListItem", position: 2, name: "开发案例", item: SITE + "/cases" },
+      { "@type": "ListItem", position: 3, name: c.title, item: url },
+    ],
+  };
+  return "<script type=\"application/ld+json\">" + JSON.stringify(ld) + "</script>" + "\n" +
+         "<script type=\"application/ld+json\">" + JSON.stringify(bc) + "</script>";
+}
+function faqJsonLd() {
+  return '<script type="application/ld+json">' + JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    'mainEntity': [
+      { '@type': 'Question', 'name': '做一个微信小程序要多少钱？', 'acceptedAnswer': { '@type': 'Answer', 'text': '微信小程序开发费用根据功能复杂度而定。基础展示型约2000-5000元，电商类约5000-15000元，复杂定制15000元起。汇智云码科技提供标准化套餐和完全定制两种方案，源码交付，价格透明。' }},
+      { '@type': 'Question', 'name': 'APP开发需要多长时间？', 'acceptedAnswer': { '@type': 'Answer', 'text': 'APP开发周期取决于功能复杂度。简单展示型约4-6周，中等功能约8-12周，复杂APP约12-20周。汇智云码科技采用敏捷开发模式，每周可演示可验收。' }},
+      { '@type': 'Question', 'name': '汇智云码科技是正规公司吗？', 'acceptedAnswer': { '@type': 'Answer', 'text': '汇智云码科技是正规注册的软件开发公司，2020年成立于青岛胶州，拥有鲁ICP备2026038130号-1备案。核心团队来自腾讯、阿里、字节，已服务120+企业客户，累计交付200+项目。' }},
+      { '@type': 'Question', 'name': '企业网站建设哪家好？', 'acceptedAnswer': { '@type': 'Answer', 'text': '选择网站建设公司需关注：技术团队实力、案例数量与质量、源码是否交付、售后服务保障。汇智云码科技提供源码交付、1年免费维护、终身技术支持。' }},
+      { '@type': 'Question', 'name': '青岛软件开发公司有哪些推荐？', 'acceptedAnswer': { '@type': 'Answer', 'text': '青岛软件开发公司中，汇智云码科技专注移动应用与小程序定制开发，核心团队来自腾讯、阿里、字节，拥有8年+行业经验，200+成功案例。' }}
+    ]
+  }) + '</script>';
+}
+
+function serviceJsonLd(description) {
+  return '<script type="application/ld+json">' + JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'Service',
+    serviceType: '软件开发服务（小程序开发/APP定制/企业网站建设）',
+    provider: { '@type': 'Organization', name: '汇智云码科技', url: SITE + '/' },
+    areaServed: 'CN',
+    description: trunc(description, 200),
+  }) + '</script>';
+}
+
+
+function websiteJsonLd() {
+  return '<script type="application/ld+json">' + JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'WebSite',
+    name: '汇智云码科技',
+    url: SITE + '/',
+    inLanguage: 'zh-CN',
+    potentialAction: {
+      '@type': 'SearchAction',
+      target: { '@type': 'EntryPoint', urlTemplate: SITE + '/articles?keyword={search_term_string}' },
+      'query-input': 'required name=search_term_string'
+    }
+  }) + '</' + 'script>';
+}
+function localBusinessJsonLd(info) {
+  var name = (info && info.company_name) || '汇智云码科技';
+  var addr = (info && info.company_address) || '山东省青岛市胶州市阜安街道东关大街8号中央公园写字楼11楼';
+  var phone = (info && info.company_phone) || '';
+  var email = (info && info.company_email) || '';
+  var intro = (info && info.company_intro) ? trunc(info.company_intro, 200) : '青岛小程序开发、APP定制开发、企业网站建设服务商';
+  var obj = {
+    '@context': 'https://schema.org',
+    '@type': 'ProfessionalService',
+    name: name,
+    url: SITE + '/',
+    logo: SITE + '/favicon.svg',
+    description: intro,
+    image: SITE + '/seo/images/og-cover.png',
+    address: { '@type': 'PostalAddress', addressCountry: 'CN', addressRegion: '山东省', addressLocality: '青岛市', streetAddress: addr },
+    areaServed: 'CN',
+    priceRange: '¥¥',
+    openingHours: ['Mo-Sa 09:00-18:00'],
+    sameAs: []
+  };
+  var lbMobile = getMobile(info);
+  if (lbMobile) obj.telephone = lbMobile;
+  if (email) obj.email = email;
+  return '<script type="application/ld+json">' + JSON.stringify(obj) + '</' + 'script>';
+}
+function collectionPageJsonLd(name, desc) {
+  return '<script type="application/ld+json">' + JSON.stringify({
+    '@context': 'https://schema.org', '@type': 'CollectionPage',
+    name: name, description: desc, url: SITE + '/city',
+    isPartOf: { '@type': 'WebSite', url: SITE + '/', name: '汇智云码科技' }
+  }) + '</' + 'script>';
+}
+// 重点城市互链模块（城市首页底部"其他热门城市"，助蜘蛛发现与权重传递）
+function cityCrossLinks(currentSd) {
+  var order = ['qingdao','jinan','beijing','shanghai','guangzhou','shenzhen','hangzhou','chengdu','nanjing','wuhan','xian','suzhou','tianjin','chongqing','zhengzhou','changsha','ningbo','yantai','weifang','linyi'];
+  var nameMap = {qingdao:'青岛',jinan:'济南',beijing:'北京',shanghai:'上海',guangzhou:'广州',shenzhen:'深圳',hangzhou:'杭州',chengdu:'成都',nanjing:'南京',wuhan:'武汉',xian:'西安',suzhou:'苏州',tianjin:'天津',chongqing:'重庆',zhengzhou:'郑州',changsha:'长沙',ningbo:'宁波',yantai:'烟台',weifang:'潍坊',linyi:'临沂'};
+  var links = order.filter(function(sd){ return sd !== currentSd; }).slice(0, 12).map(function(sd){
+    return '<a href="https://' + sd + '.openai2000.cn/" style="display:inline-block;margin:4px 8px 4px 0;padding:6px 14px;background:#f1f5f9;border-radius:16px;font-size:14px;color:#1e40af;text-decoration:none;">' + nameMap[sd] + '</a>';
+  }).join('');
+  return '<section class="section" style="max-width:1200px;margin:0 auto;padding:40px 20px 60px;"><h2>其他热门城市服务</h2><div>' + links + '</div></section>';
+}
+
+// ---------- 生成一个标准 SEO 页面 ----------
+function seoPage(page, opts = {}) {
+  const {
+    title = opts.pageTitle || '汇智云码科技',
+    description = '',
+    keywords = '企业网站建设,小程序开发,APP定制开发,软件开发,青岛软件公司',
+    canonical = `${SITE}${page}`,
+    body = '',
+    isHome = false,
+    jsonLd = '',
+    robots = 'index,follow',
+  } = opts;
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="baidu-site-verification" content="codeva-geushDpNvl" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${esc(title)}</title>
+<meta name="description" content="${esc(description)}">
+<meta name="keywords" content="${esc(keywords)}">
+<link rel="canonical" href="${canonical}">
+<meta property="og:title" content="${esc(title)}">
+<meta property="og:description" content="${esc(description)}">
+<meta property="og:type" content="website">
+<meta property="og:url" content="${canonical}">
+<meta name="robots" content="${robots}">
+<link rel="icon" type="image/svg+xml" href="${SITE}/favicon.svg">
+<link rel="stylesheet" href="${SITE}/seo.css">
+<!-- 百度统计 -->
+<script>
+var _hmt = _hmt || [];
+(function() {
+  var hm = document.createElement("script");
+  hm.src = "https://hm.baidu.com/hm.js?289eab39430e2f97aa77b242004802b3";
+  var s = document.getElementsByTagName("script")[0];
+  s.parentNode.insertBefore(hm, s);
+})();
+</script>
+${jsonLd}
+</head>
+<body>
+<header class="seo-header">
+  <div class="seo-wrap">
+    <a class="seo-logo" href="${SITE}/">汇智云码科技</a>
+    <nav class="seo-nav">
+      <a href="${SITE}/">首页</a>
+      <a href="${SITE}/services">服务</a>
+      <a href="${SITE}/cases">案例</a>
+      <a href="${SITE}/templates">模板商城</a>
+      <a href="${SITE}/articles">资讯</a>
+      <a href="${SITE}/about">关于</a>
+      <a href="${SITE}/contact">联系</a>
+    </nav>
+  </div>
+</header>
+<main class="seo-main">
+${body}
+</main>
+<footer class="seo-footer">
+  <div class="seo-wrap">
+    <p>汇智云码科技 - 专业企业网站建设 / 小程序开发 / APP定制开发服务商</p>
+    <p>电话咨询 / 微信同号，快速响应您的建站与开发需求</p>
+    <p><a href="${SITE}/contact">联系我们</a></p>
+    <p>姐妹站：<a href="https://ai.openai2000.cn">智云互联AI - AI工具导航与实操教程</a></p>
+
+    <p>${FOOTER_ICP ? `<a href="https://beian.miit.gov.cn/" target="_blank" rel="nofollow noopener">${esc(FOOTER_ICP)}</a>` : ''}${FOOTER_BEIAN ? `　<a href="https://beian.mps.gov.cn/#/" target="_blank" rel="nofollow noopener">${esc(FOOTER_BEIAN)}</a>` : ''}</p>
+  </div>
+</footer>
+</body>
+</html>
+`;
+}
+
+function cardGrid(items, kind) {
+  return `<section class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;">
+${items.map(it => `<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;">
+  ${it.image ? `<img class="card-img" style="width:100%;height:auto;border-radius:8px;margin-bottom:16px;display:block;" src="${it.image}" alt="${esc(it.title)}" loading="lazy" width="800" height="450">` : ''}
+  <h3><a href="${SITE}${it.href}">${esc(it.title)}</a></h3>
+  ${it.meta ? `<p class="meta" style="color:#6b7280;font-size:14px;">${esc(it.meta)}</p>` : ''}
+  ${it.summary ? `<p>${esc(trunc(it.summary, 100))}</p>` : ''}
+</article>`).join('\n')}
+</section>`;
+}
+
+// ---------- 各页面 body ----------
+function homeBody(services, cases, articles, templates) {
+  return `
+<section class="hero" style="background:linear-gradient(135deg,#1e3a8a,#3730a3,#6d28d9);color:#fff;padding:80px 20px;text-align:center;">
+  <h1>汇智云码科技 - 企业网站建设 · 小程序开发 · APP定制开发</h1>
+  <p>青岛软件开发公司，120+企业客户，${casesCountText()}成功案例，源码交付，终身维护。专注为企业提供数字化转型一站式解决方案。</p>
+  <p style="margin-top:18px;"><a href="${SITE}/#free-resource" style="display:inline-block;padding:10px 24px;background:#2563eb;color:#fff;border-radius:8px;font-weight:bold;text-decoration:none;">免费领取《2026 企业开发需求梳理与报价模板》</a></p>
+</section>
+<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;">
+  <h2>核心服务</h2>
+  <div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;">
+    ${services.map(s => `<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3><a href="${SITE}/services">${esc(s.title)}</a></h3><p>${esc(trunc(s.description, 120))}</p></article>`).join('\n')}
+  </div>
+</section>
+<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;">
+  <h2>成功案例</h2>
+  ${cardGrid(cases.slice(0, 6).map(c => ({ href: `/cases/${c.id}`, title: c.title, meta: c.client, summary: c.description, image: `${SITE}/seo/images/cases/${c.id}.jpg` })), 'case')}
+</section>
+<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;">
+  <h2>企业网站模板</h2>
+  ${cardGrid(templates.map(t => ({ href: `/templates`, title: `${t.name}（¥${Number(t.price).toFixed(0)}）`, meta: `${t.level === 'standard' ? '基础版' : t.level === 'pro' ? '专业版' : '至尊版'}`, summary: t.description })), 'tpl')}
+</section>
+<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;">
+  <h2>最新资讯</h2>
+  ${cardGrid(articles.slice(0, 6).map(a => ({ href: `/articles/${a.id}`, title: a.title, meta: a.published_at ? String(a.published_at).slice(0, 10) : '', summary: a.summary })), 'article')}
+</section>
+`;
+}
+
+function servicesBody(services) {
+  return `<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>企业建站 · 小程序 · APP开发服务</h1><p>从需求分析到上线运营的一站式数字化解决方案。</p></section>
+<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;">
+${services.map(s => `<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3>${esc(s.title)}</h3><p class="price" style="color:#dc2626;font-weight:600;font-size:16px;">参考价格：¥${Number(s.price_min).toLocaleString()} - ¥${Number(s.price_max).toLocaleString()}</p><p>${esc(trunc(s.description, 150))}</p></article>`).join('\n')}
+</div></section>
+<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>常见问题</h2><div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.8;">
+<h3>开发周期一般多长？</h3><p>小程序开发周期通常为4-8周，APP开发为8-16周，网站建设为2-6周，具体取决于功能复杂度和页面数量。</p>
+<h3>源码是否交付？</h3><p>是的，我们坚持源码全部交付客户，不捆绑托管，让您真正掌握数字化资产。</p>
+<h3>后期维护费用如何？</h3><p>免费维护期3-12个月，之后按年收取维护费用，通常为建设费用的15%-20%。</p>
+</div></section>`;
+}
+
+function casesBody(cases) {
+  return `<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>开发案例</h1><p>${casesCountText()} 成功案例，涵盖餐饮、制造、教育、医疗、跨境、酒店等多个行业。</p></section>
+${cardGrid(cases.map(c => ({ href: `/cases/${c.id}`, title: c.title, meta: `${c.category} · ${c.client}`, summary: c.description, image: `${SITE}/seo/images/cases/${c.id}.jpg` })), 'case')}`;
+}
+
+function caseBody(c) {
+  return `<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>${esc(c.title)}</h1><p class="meta" style="color:#6b7280;font-size:14px;">${esc(c.category)} · ${esc(c.client)}${c.technologies ? ' · ' + esc(c.technologies) : ''}</p></section>
+<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><img class="case-img" style="width:100%;max-width:900px;height:auto;border-radius:12px;margin:0 auto 24px;display:block;" src="${SITE}/seo/images/cases/${c.id}.jpg" alt="${esc(c.title)}_开发案例封面" width="800" height="450"></section>
+<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.8;">${c.content || esc(c.description || '')}</div>
+<p><a href="${SITE}/cases">← 返回全部案例</a>　<a href="${SITE}/contact">获取同类方案</a></p></section>
+<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>客户评价</h2><div class="content" style="background:#f8fafc;padding:24px;border-radius:12px;margin:16px 0;"><div style="color:#f59e0b;font-size:24px;">★★★★★</div><p style="margin:12px 0;font-size:16px;line-height:1.8;">"与汇智云码合作非常愉快，开发周期短、质量高、售后响应快。强烈推荐！"</p><p style="color:#6b7280;">—— 项目负责人</p></div></section>
+<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>项目问答</h2><div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.8;">
+<h3>这个项目的主要技术栈是什么？</h3><p>${esc(c.technologies || '根据项目需求选用最适合的技术栈，确保性能和可维护性。')}</p>
+<h3>项目开发周期多长？</h3><p>根据功能复杂度，通常为4-12周。我们会在需求确认后提供详细的项目排期。</p>
+<h3>后期维护如何保障？</h3><p>我们提供3-12个月免费维护期，并可签订长期运维合同，确保系统稳定运行。</p>
+</div></section>
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"${esc(c.title)}的主要技术栈是什么？","acceptedAnswer":{"@type":"Answer","text":"${esc(c.technologies || '根据项目需求选用最适合的技术栈。')}"}},{"@type":"Question","name":"这个项目的开发周期多长？","acceptedAnswer":{"@type":"Answer","text":"根据功能复杂度，通常为4-12周。"}},{"@type":"Question","name":"后期维护如何保障？","acceptedAnswer":{"@type":"Answer","text":"提供3-12个月免费维护期，可签订长期运维合同。"}}]}</script>`;
+}
+
+function articlesBody(articles) {
+  return `<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>行业资讯与开发知识</h1><p>网站建设、小程序开发、APP开发的技术干货与行业趋势。</p></section>
+${cardGrid(articles.map(a => ({ href: `/articles/${a.id}`, title: a.title, meta: `${a.category} · ${String(a.published_at).slice(0, 10)}`, summary: a.summary })), 'article')}`;
+}
+
+function articleSectionFig(n) {
+  const hue = (n * 47) % 360;
+  const cx = 120 + ((n * 60) % 200);
+  const cap = '<figcaption style="color:#6b7280;font-size:13px;margin-top:8px;text-align:center;">图 ' + n + ' · 本章要点示意图</figcaption>';
+  const svg = '<svg viewBox="0 0 800 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="section illustration ' + n + '" style="width:100%;height:auto;border-radius:12px;display:block;">'
+    + '<rect width="800" height="200" fill="hsl(' + hue + ',65%,22%)"/>'
+    + '<circle cx="' + cx + '" cy="100" r="52" fill="hsl(' + hue + ',80%,58%)" opacity="0.9"/>'
+    + '<circle cx="' + (cx + 30) + '" cy="78" r="18" fill="hsl(' + hue + ',85%,75%)" opacity="0.7"/>'
+    + '<rect x="380" y="62" width="300" height="14" rx="7" fill="#ffffff" opacity="0.92"/>'
+    + '<rect x="380" y="92" width="240" height="10" rx="5" fill="#ffffff" opacity="0.55"/>'
+    + '<rect x="380" y="114" width="270" height="10" rx="5" fill="#ffffff" opacity="0.35"/>'
+    + '<rect x="380" y="136" width="180" height="10" rx="5" fill="#ffffff" opacity="0.2"/>'
+    + '</svg>';
+  return '<figure class="article-fig" style="margin:24px 0;">' + svg + cap + '</figure>';
+}
+function addArticleFigs(content) {
+  let i = 0;
+  return String(content || '').replace(/<\/h[23]>/g, function(m) {
+    i += 1;
+    return m + articleSectionFig(i);
+  });
+}
+function articleBody(a, articles, cases, solutions) {
+  // 相关文章：同分类最多3篇，不足补最新文章（排除当前文章）
+  const all = Array.isArray(articles) ? articles : [];
+  const related = all.filter(x => x.id !== a.id && x.category === a.category).slice(0, 3);
+  if (related.length < 3) {
+    const used = new Set(related.map(x => x.id));
+    used.add(a.id);
+    const fill = all.filter(x => !used.has(x.id))
+      .sort((p, q) => (q.id || 0) - (p.id || 0))
+      .slice(0, 3 - related.length);
+    related.push(...fill);
+  }
+  const relatedHtml = related.length ? `<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>相关文章</h2><div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;">
+${related.map(x => `<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3><a href="${SITE}/articles/${x.id}">${esc(x.title)}</a></h3><p class="meta" style="color:#6b7280;font-size:14px;">${esc(x.category)} · ${String(x.published_at).slice(0, 10)}</p><p>${esc(trunc(x.summary, 80))}</p></article>`).join('\n')}
+</div></section>` : '';
+  
+  // 相关案例：根据文章关键词匹配案例
+  const allCases = Array.isArray(cases) ? cases : [];
+  const articleText = ((a.title || '') + ' ' + (a.summary || '') + ' ' + (a.content || '')).toLowerCase();
+  const caseKeywords = ['小程序', 'app', '网站', '开发', '餐饮', '教育', '医疗', '电商', '商城'];
+  const matchedCases = allCases.filter(c => {
+    const caseText = ((c.title || '') + ' ' + (c.description || '')).toLowerCase();
+    return caseKeywords.some(kw => articleText.includes(kw) && caseText.includes(kw));
+  }).slice(0, 3);
+  const casesHtml = matchedCases.length ? `<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>相关案例</h2><div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;">
+${matchedCases.map(c => `<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3><a href="${SITE}/cases/${c.id}">${esc(c.title)}</a></h3><p class="meta" style="color:#6b7280;font-size:14px;">${esc(c.client || '')}</p><p>${esc(trunc(c.description, 100))}</p></article>`).join('\n')}
+</div></section>` : '';
+
+  // 行业方案推荐
+  const allSolutions = Array.isArray(solutions) ? solutions : [];
+  const solutionKeywords = {'餐饮':'catering','教育':'education','医疗':'medical','电商':'retail','商城':'retail','美容':'beauty','酒店':'hotel','物流':'logistics','制造':'manufacturing','农业':'agriculture','房产':'realestate','汽车':'automotive','旅游':'tourism','婚庆':'wedding','家政':'housekeeping'};
+  const matchedSolutions = allSolutions.filter(s => {
+    return Object.keys(solutionKeywords).some(kw => articleText.includes(kw) && ((s.name || '').includes(kw) || (s.industry || '').includes(kw)));
+  }).slice(0, 3);
+  // 如果没匹配到具体行业，推荐通用方案
+  const solutionsToShow = matchedSolutions.length ? matchedSolutions : allSolutions.slice(0, 3);
+  const solutionsHtml = solutionsToShow.length ? `<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>行业解决方案</h2><div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;">
+${solutionsToShow.map(s => `<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3><a href="${SITE}/solutions/${s.slug || s.name}">${esc(s.name || s.industry)}</a></h3><p>${esc(trunc(s.description || s.summary || '', 100))}</p></article>`).join('\n')}
+</div></section>` : '';
+  
+  // 检测是否为教程类文章，添加HowTo Schema
+  const isTutorial = isTutorialArticle(a.title);
+  const steps = isTutorial ? extractSteps(a.content || '') : null;
+  const howToHtml = steps ? `<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>操作步骤</h2><div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.8;"><ol>${steps.map(s => '<li style="margin-bottom:16px;"><strong>' + esc(s.title) + '</strong><br>' + esc(s.content.trim()) + '</li>').join('')}</ol></div></section>` : '';
+  
+  return `<nav class="breadcrumb" style="max-width:1200px;margin:0 auto;padding:16px 20px;font-size:14px;color:#6b7280;"><a href="${SITE}/">首页</a> › <a href="${SITE}/articles">资讯列表</a> › ${esc(a.title)}</nav>
+<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>${esc(a.title)}</h1><p class="meta" style="color:#6b7280;font-size:14px;">${esc(a.category)} · ${esc(a.author || '汇智云码科技')} · ${String(a.published_at).slice(0, 10)}</p></section>
+<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.8;">${addArticleFigs(a.content)}</div>
+<p><a href="${SITE}/articles">← 返回资讯列表</a></p></section>
+<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>相关服务推荐</h2><div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;"><article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;"><h3><a href="${SITE}/services">小程序开发服务</a></h3><p>专业微信小程序定制开发，电商、教育、医疗等行业解决方案。</p><p><a href="${SITE}/contact">获取报价 →</a></p></article><article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;"><h3><a href="${SITE}/services">APP定制开发</a></h3><p>原生iOS/Android和Flutter跨平台开发，高性能体验优秀。</p><p><a href="${SITE}/contact">获取报价 →</a></p></article><article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;"><h3><a href="${SITE}/services">企业网站建设</a></h3><p>高端定制企业官网、SaaS平台，Vue3+Node.js全栈开发。</p><p><a href="${SITE}/contact">获取报价 →</a></p></article></div></section>
+<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>文章问答</h2><div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.8;">
+<h3>这篇文章的核心观点是什么？</h3><p>${esc(trunc(a.summary, 100))}</p>
+<h3>如何获取更多技术方案？</h3><p>您可以访问<a href="${SITE}/services">服务页面</a>了解我们的技术能力，或<a href="${SITE}/contact">联系我们</a>获取专属方案。</p>
+</div></section>
+${casesHtml}
+${solutionsHtml}
+${relatedHtml}
+<script type="application/ld+json">{"@context":"https://schema.org","@type":"FAQPage","mainEntity":[{"@type":"Question","name":"${esc(a.title)}的核心观点是什么？","acceptedAnswer":{"@type":"Answer","text":"${esc(trunc(a.summary, 160))}"}},{"@type":"Question","name":"如何获取更多技术方案？","acceptedAnswer":{"@type":"Answer","text":"访问汇智云码科技服务页面或联系获取专属方案。"}}]}</script>`;
+}
+
+function aboutBody(info) {
+  return `<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>关于汇智云码科技</h1><p>青岛软件开发公司，团队核心成员来自腾讯、阿里、字节。</p></section>
+<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.8;">${info ? (info.company_intro || '') : ''}</div></section>`;
+}
+
+function templatesBody(templates) {
+  return `<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>企业网站模板商城</h1><p>精选企业级网站模板，购买后源码交付，支持二次开发。含在线演示。</p></section>
+<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;">
+${templates.map(t => `<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;">${(t.demo_url || '').match(/\/([a-z]+)\/?$/) ? `<img class="card-img" style="width:100%;height:auto;border-radius:8px;margin-bottom:16px;display:block;" src="${SITE}/seo/images/templates/${t.demo_url.replace(/\/$/, '').split('/').pop()}.jpg" alt="${esc(t.name)}_网站模板截图" loading="lazy" width="800" height="450">` : ''}<h3><a href="${SITE}/templates">${esc(t.name)}</a></h3><p class="price" style="color:#dc2626;font-weight:600;font-size:16px;">价格：<strong>¥${Number(t.price).toFixed(0)}</strong></p><p>${esc(t.description || '')}</p>${t.demo_url ? `<p><a href="${esc(t.demo_url)}" rel="nofollow">在线演示</a></p>` : ''}</article>`).join('\n')}
+</div></section>`;
+}
+
+function packagesBody(packages) {
+  if (!packages || packages.length === 0) return `<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>软件开发套餐</h1><p>网站建设、小程序、APP标准化开发套餐，明码标价，在线直接下单。</p></section>`;
+  const bizMap = { website: '网站建设', miniapp: '小程序', app: 'APP开发' };
+  const group = {};
+  for (const p of packages) {
+    (group[bizMap[p.biz_type] || p.biz_type] = group[bizMap[p.biz_type] || p.biz_type] || []).push(p);
+  }
+  return `<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>软件开发套餐 · 明码标价</h1><p>按行业标准化配置，明码标价，在线直接选择下单，源码交付。</p><p><a href="${SITE}/packages">➤ 在线选配套餐并下单</a></p></section>
+${Object.entries(group).map(([type, list]) => `<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2 class="seo-type">${type}开发套餐</h2><div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;">
+${list.map(p => `<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3>${esc(p.name)}（${esc(p.industry)}）</h3><p class="price" style="color:#dc2626;font-weight:600;font-size:16px;">明码标价：<strong>¥${Number(p.price).toFixed(0)}</strong> <s>¥${Number(p.original_price).toFixed(0)}</s></p><p>${esc((p.features || '').split('|').slice(0, 4).join('、'))}</p><p><a href="${SITE}/packages">在线下单</a></p></article>`).join('\n')}
+</div></section>`).join('\n')}`;
+}
+
+function contactBody(info) {
+  // 兼容 company_ 前缀（数据库实际 key）与无前缀两种
+  const phone = info && (info.company_phone || info.phone) ? esc(info.company_phone || info.phone) : '';
+  const wechat = info && (info.company_wechat || info.wechat) ? esc(info.company_wechat || info.wechat) : '';
+  const address = info && (info.company_address || info.address) ? esc(info.company_address || info.address) : '山东青岛';
+  const email = info && (info.company_email || info.email) ? esc(info.company_email || info.email) : '';
+  const cMobile = getMobile(info);
+  const cMask = cMobile ? esc(maskMobile(cMobile)) : '';
+  const cData = cMobile ? (cMobile.slice(0,3)+'-'+cMobile.slice(3,7)+'-'+cMobile.slice(7)) : '';
+  const mobileLinkHtml = cMobile ? '<p class="contact-row" style="margin-bottom:16px;font-size:16px;">📱 手机/微信同号（点击拨打）：<a href="#" data-tel="'+cData+'" class="js-tel" style="font-size:20px;font-weight:bold;color:#1d4ed8;">'+cMask+'</a></p>' : '';
+  const mobileJs = cMobile ? '<script>(function(){var a=document.querySelector(".js-tel");if(a){a.addEventListener("click",function(e){e.preventDefault();location.href="tel:"+this.getAttribute("data-tel").replace(/\D/g,"");});}})();<'+'/script>' : '';
+  const mobileHtml = mobileLinkHtml + mobileJs;
+  return `<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>联系我们</h1><p>获取企业网站建设、小程序开发、APP定制开发方案与报价。</p></section>
+<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.8;">
+${mobileHtml}
+${phone ? `<p class="contact-row" style="margin-bottom:16px;font-size:16px;">📞 QQ咨询：<a href="tel:${phone}" style="font-size:20px;font-weight:bold;color:#1d4ed8;">${phone}</a>（点击直接拨打）</p>` : ''}
+${wechat && wechat !== '扫二维码' ? `<p class="contact-row" style="margin-bottom:16px;font-size:16px;">💬 微信：${wechat}（添加请备注"网站咨询"）</p>` : ''}
+${email ? `<p class="contact-row" style="margin-bottom:16px;font-size:16px;">📧 邮箱：<a href="mailto:${email}">${email}</a></p>` : ''}
+<p class="contact-row" style="margin-bottom:16px;font-size:16px;">📍 地址：${address}（支持远程合作）</p>
+<p class="contact-row" style="margin-bottom:16px;font-size:16px;">🖼️ 微信扫码咨询：<br><img src="${SITE}/uploads/wechat_qr.png" alt="汇智云码科技微信二维码_扫码咨询小程序开发APP开发报价" style="width:160px;height:160px;border-radius:8px;margin-top:8px;"></p>
+<div style="margin-top:24px;padding:20px;background:#f0f7ff;border-radius:12px;text-align:center;">
+<p style="font-size:18px;font-weight:bold;color:#1e3a8a;">👉 想获取专属方案与报价？</p>
+<p>免费需求梳理 · 透明报价 · 24小时响应</p>
+<p style="margin-top:12px;"><a href="${SITE}/contact" style="display:inline-block;padding:12px 32px;background:#2563eb;color:#fff;border-radius:8px;font-weight:bold;text-decoration:none;">立即在线留言咨询</a></p>
+</div>
+<p style="margin-top:16px;">我们提供：需求梳理免费，方案报价透明，快速响应。</p>
+</div></section>`;
+}
+
+// ---------- sitemap 生成 ----------
+function buildSitemap(urls) {
+  const now = new Date().toISOString().slice(0, 10);
+  const items = [...new Set(urls)].map(u => {
+    const url = u.startsWith('http') ? u : `${SITE}${u}`;
+    return `  <url>\n    <loc>${esc(url)}</loc>\n    <lastmod>${now}</lastmod>\n    <changefreq>weekly</changefreq>\n    <priority>0.8</priority>\n  </url>`;
+  });
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${items.join('\n')}\n</urlset>\n`;
+}
+
+// ---------- 案例封面占位图 ----------
+// 确保每个案例都有 800x450 封面：深色渐变背景 + 白色中文标题（过长截断）+ 底部行业类别小字。
+// 首页、cases 栏目页、case 详情页共用该封面，生成前调用补齐缺失图片。
+function ensureCaseImages(cases) {
+  fs.mkdirSync(CASES_IMG_DIR, { recursive: true });
+  let generated = 0;
+  for (const c of cases) {
+    const file = path.join(CASES_IMG_DIR, `${c.id}.jpg`);
+    if (fs.existsSync(file)) continue;
+    const title = trunc(c.title, 16) || '案例展示';
+    const category = trunc(c.category || '行业案例', 14);
+    const cmd = [
+      'convert',
+      '-size', '800x450',
+      "gradient:'#111827'-'#1e3a8a'",
+      '-font', shq(CASE_COVER_FONT),
+      '-fill', 'white',
+      '-gravity', 'center',
+      '-pointsize', '38',
+      '-annotate', '+0-10', shq(title),
+      '-fill', "'#94a3b8'",
+      '-gravity', 'south',
+      '-pointsize', '22',
+      '-annotate', '+0+30', shq(category),
+      shq(file),
+    ].join(' ');
+    try {
+      execSync(cmd, { stdio: 'ignore' });
+      generated += 1;
+      console.log(`   - 生成案例封面: seo/images/cases/${c.id}.jpg`);
+    } catch (e) {
+      console.error(`   ⚠️ 案例封面生成失败 seo/images/cases/${c.id}.jpg: ${e.message}`);
+    }
+  }
+  if (generated > 0) console.log(`   - 本次新增案例封面 ${generated} 张`);
+}
+
+// ---------- 主流程 ----------
+// ---------- City SEO Pages ----------
+// ===== 重点城市差异化（20城），避免批量薄内容判定 =====
+var PRIORITY_CITIES = {
+  qingdao:{hq:true,inds:['外贸与海洋经济','零售连锁','餐饮','智能制造']},
+  jinan:{inds:['政务与国企数字化','教育','医疗','装备制造']},
+  yantai:{inds:['海洋食品','葡萄酒文旅','装备制造','跨境电商']},
+  weifang:{inds:['现代农业装备','动力装备','蔬菜批发电商','文旅']},
+  linyi:{inds:['商贸物流批发','建材家居','板材产业','直播电商']},
+  beijing:{inds:['互联网与SaaS','金融科技','教育','医疗健康']},
+  shanghai:{inds:['金融贸易','跨境电商','汽车与高端制造','连锁服务']},
+  guangzhou:{inds:['服装批发电商','美妆日化','餐饮连锁','会展商贸']},
+  shenzhen:{inds:['智能硬件','跨境电商','SaaS与企业服务','金融科技']},
+  hangzhou:{inds:['直播电商','SaaS','服装零售','文旅']},
+  chengdu:{inds:['餐饮连锁','游戏娱乐','文旅','消费零售']},
+  nanjing:{inds:['软件与信息服务','教育','医疗','智能制造']},
+  wuhan:{inds:['光电子信息','汽车零部件','教育','医疗']},
+  xian:{inds:['能源装备','文旅','军工配套','教育']},
+  suzhou:{inds:['电子制造','工业互联网','医疗器械','跨境电商']},
+  tianjin:{inds:['港口贸易','化工','装备制造','零售连锁']},
+  chongqing:{inds:['汽车制造','餐饮','装备制造','文旅']},
+  zhengzhou:{inds:['食品加工','商贸物流','装备制造','教育']},
+  changsha:{inds:['工程机械','文娱传媒','餐饮连锁','消费电子']},
+  ningbo:{inds:['外贸出口','模具与文具','跨境电商','港口物流']}
+};
+var INDUSTRY_KW = {
+  '外贸与海洋经济':['外贸','海洋','跨境','出口'],'跨境电商':['电商','商城','购物','零售'],
+  '直播电商':['电商','直播','商城'],'服装批发电商':['电商','服装','商城'],'服装零售':['服装','电商','零售'],
+  '零售连锁':['零售','连锁','会员','门店','扫码购'],'餐饮':['餐饮','点餐','外卖','奶茶'],
+  '餐饮连锁':['餐饮','点餐','外卖'],'智能制造':['制造','工业','设备','管理系统'],
+  '工业互联网':['工业','制造','设备','管理'],'智能硬件':['硬件','IoT','物联网','设备'],
+  '教育':['教育','培训','K12','课程','招生'],'医疗':['医疗','医院','门诊','问诊','挂号'],
+  '医疗健康':['医疗','医院','门诊','问诊'],'医疗器械':['医疗','器械','健康'],
+  '文旅':['文旅','旅游','门票','酒店'],'商贸物流批发':['物流','批发','商城','供应链'],
+  '商贸物流':['物流','商贸','供应链'],'政务与国企数字化':['政务','管理系统','OA','审批'],
+  '金融科技':['金融','支付','理财'],'金融贸易':['金融','贸易','支付'],
+  'SaaS与企业服务':['SaaS','管理系统','CRM','OA'],'软件与信息服务':['管理系统','SaaS','OA','CRM'],
+  'SaaS':['SaaS','管理系统','CRM'],'互联网与SaaS':['SaaS','互联网','管理系统'],
+  '汽车与高端制造':['汽车','制造','配件'],'汽车制造':['汽车','制造'],'汽车零部件':['汽车','配件','制造'],
+  '电子制造':['电子','制造','设备'],'装备制造':['装备','制造','机械'],'工程机械':['机械','装备','制造'],
+  '动力装备':['制造','装备','机械'],'现代农业装备':['农业','装备','电商'],'蔬菜批发电商':['电商','批发','生鲜'],
+  '海洋食品':['食品','电商','供应链'],'葡萄酒文旅':['文旅','电商','零售'],'港口贸易':['港口','物流','外贸'],
+  '港口物流':['港口','物流','货运'],'外贸出口':['外贸','跨境','出口'],'模具与文具':['制造','模具','批发'],
+  '能源装备':['能源','装备','制造'],'军工配套':['制造','装备','管理'],'光电子信息':['电子','制造','管理系统'],
+  '化工':['化工','制造','管理'],'游戏娱乐':['游戏','娱乐','社交'],'文娱传媒':['传媒','内容','娱乐'],
+  '消费电子':['电子','商城','零售'],'消费零售':['零售','商城','会员'],'会展商贸':['会展','商贸','管理'],
+  '美妆日化':['美妆','电商','商城'],'连锁服务':['连锁','会员','门店'],'食品加工':['食品','餐饮','供应链'],
+  '建材家居':['建材','家居','装修'],'板材产业':['建材','家居','批发']
+};
+function pickLocalCases(allCases, inds, limit) {
+  var pool = [];
+  inds.forEach(function(ind){ (INDUSTRY_KW[ind]||[]).forEach(function(kw){ allCases.forEach(function(c){ var hay=(c.category||'')+(c.title||''); if (hay.indexOf(kw)>=0 && pool.indexOf(c)<0) pool.push(c); }); }); });
+  if (pool.length === 0) pool = allCases.slice();
+  return pool.slice(0, limit || 6);
+}
+function cityLocalBlock(cfg, cn, pn, sd) {
+  var hq = cfg.hq, inds = cfg.inds;
+  var meet = hq ? ('总部位于青岛胶州（东关大街8号中央公园写字楼11楼），'+cn+'及周边客户可随时预约上门面谈、需求调研与阶段性验收。') : ('总部位于山东青岛，在'+cn+'采用“远程协作 + 就近项目支持”模式：需求沟通与原型评审通过视频会议高效完成，关键节点（立项、验收、上线）可安排同事到'+cn+'现场支持，合同、发票、售后标准与总部完全一致。');
+  var h = '';
+  h += '<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>'+cn+'本地数字化服务说明</h2>';
+  h += '<div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.9;">';
+  h += '<p>'+meet+'</p>';
+  h += '<p>我们为'+cn+'及'+pn+'客户提供微信小程序开发、APP 定制、企业官网与管理系统开发，源码交付、终身技术支持；需求梳理与初步报价免费，通常 1 个工作日内反馈。</p>';
+  h += '<p>结合'+cn+'的产业特点，我们重点服务：'+inds.map(function(i){return '<strong>'+i+'</strong>';}).join('、')+' 等领域的数字化项目。</p>';
+  h += '</div></section>';
+  var faqs = [
+    {q: cn+'本地可以上门面谈吗？', a: hq ? ('可以。我们在'+cn+'有固定办公地点，'+pn+cn+'客户均可预约上门沟通、驻场调研与现场验收。') : ('关键节点（立项、原型确认、上线验收）可安排同事到'+cn+'现场，日常通过视频会议与项目管理工具协作，响应不受地域影响。')},
+    {q: '在'+cn+'做一个小程序或 APP 大概多少钱？', a: '价格取决于功能复杂度：展示型小程序数千元起，电商/预约类通常 1-3 万元，定制 APP 一般 1.5 万元起。标准化套餐明码标价，也可完全定制，需求确认后出具书面报价，无隐形收费。'},
+    {q: '开发周期一般多长？', a: '小程序常见 3-6 周，中等功能 APP 约 8-12 周，复杂平台 3 个月以上。采用敏捷开发，每周可演示可验收，'+cn+'项目与总部执行同一交付标准。'},
+    {q: '源码和售后怎么保障？', a: '全部源码与设计稿交付客户，项目文档、部署说明齐全；上线后 1 年免费维护、终身技术支持，后续迭代按人天透明计费。'},
+    {q: '合同和发票怎么签？', a: '签订正式开发合同，支持'+cn+'本地企业对公打款，开具增值税发票，按里程碑付款，保障双方权益。'}
+  ];
+  h += '<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>'+cn+'小程序/APP 开发常见问题</h2>';
+  h += '<div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px 32px;line-height:1.9;">';
+  faqs.forEach(function(f){ h += '<h3 style="margin:20px 0 8px;">'+f.q+'</h3><p style="margin:0 0 12px;">'+f.a+'</p>'; });
+  h += '</div></section>';
+  var faqLd = '<script type="application/ld+json">'+JSON.stringify({'@context':'https://schema.org','@type':'FAQPage',mainEntity:faqs.map(function(f){return {'@type':'Question',name:f.q,acceptedAnswer:{'@type':'Answer',text:f.a}};})})+'</'+'script>';
+  return {html:h, faqLd:faqLd};
+}
+function cityBreadcrumbLd(sd, pageName) {
+  var base='https://'+sd+'.openai2000.cn'; var items=[{name:'首页',url:base+'/'}];
+  var paths={services:'服务介绍',cases:'开发案例',about:'关于我们',templates:'模板商城',packages:'服务套餐',articles:'资讯博客',contact:'联系我们'};
+  if (paths[pageName]) items.push({name:paths[pageName], url:base+'/'+pageName});
+  return '<script type="application/ld+json">'+JSON.stringify({'@context':'https://schema.org','@type':'BreadcrumbList',itemListElement:items.map(function(it,i){return {'@type':'ListItem',position:i+1,name:it.name,item:it.url};})})+'</'+'script>';
+}
+function cityBody(city, province, services, cases) {
+  var cn = city.name;
+  var pn = province.name;
+  var svcs = services.map(function(s) { return '<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3>' + esc(s.title) + '</h3><p>' + esc(trunc(s.description, 120)) + '</p></article>'; }).join('\n');
+  var cHtml = cases.slice(0, 6).map(function(c) { return '<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3><a href="' + SITE + '/cases/' + c.id + '">' + esc(c.title) + '</a></h3><p class="meta" style="color:#6b7280;font-size:14px;">' + esc(c.client || '') + '</p><p>' + esc(trunc(c.description, 100)) + '</p></article>'; }).join('\n');
+  var ct = casesCountText();
+  var parts = [];
+  parts.push('<section class="hero" style="background:linear-gradient(135deg,#1e3a8a,#3730a3,#6d28d9);color:#fff;padding:80px 20px;text-align:center;">');
+  parts.push('  <h1>' + cn + '小程序开发_企业建站_APP开发 - 汇智云码科技</h1>');
+  parts.push('  <p>汇智云码科技面向' + cn + '及' + pn + '企业，专注微信小程序开发、APP定制开发、企业网站建设。' + ct + '成功案例，源码交付，终身维护。</p>');
+  parts.push('  <p style="margin-top:18px;"><a href="' + SITE + '/contact" style="display:inline-block;padding:10px 24px;background:#2563eb;color:#fff;border-radius:8px;font-weight:bold;text-decoration:none;">免费获取' + cn + '开发方案</a></p>');
+  parts.push('</section>');
+  parts.push('<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;">');
+  parts.push('  <h2>' + cn + ' - 核心服务</h2>');
+  parts.push('  <div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;">');
+  parts.push('    ' + svcs);
+  parts.push('  </div>');
+  parts.push('</section>');
+  parts.push('<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;">');
+  parts.push('  <h2>' + cn + ' - 成功案例</h2>');
+  parts.push('  ' + cHtml);
+  parts.push('</section>');
+  parts.push('<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;">');
+  parts.push('  <h2>' + cn + '本地行业解决方案</h2>');
+  parts.push('  <div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.8;">');
+  parts.push('    <p>汇智云码科技深耕' + pn + '市场，深入了解' + cn + '本地企业的数字化需求。我们为' + cn + '的餐饮、零售、教育、医疗、制造等行业提供定制化的小程序开发、APP开发和企业网站建设服务。</p>');
+  parts.push('    <p>无论您在' + cn + '需要微信小程序开发、H5网站开发、APP定制开发还是SaaS系统开发，汇智云码科技都能为您提供一站式数字化解决方案。</p>');
+  parts.push('    <p>已服务120+企业客户，累计交付' + ct + '个项目。源码交付，终身维护，价格透明。</p>');
+  parts.push('  </div>');
+  parts.push('</section>');
+  parts.push('<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;">');
+  parts.push('  <h2>' + cn + '客户案例</h2>');
+  parts.push('  <div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.8;">');
+  parts.push('    <p>我们在' + cn + '已成功交付多个项目，涵盖小程序开发、APP定制和企业建站。以下是部分' + cn + '客户的合作案例：</p>');
+  parts.push('    <ul><li>' + cn + '本地餐饮企业：扫码点餐小程序开发</li><li>' + cn + '零售门店：会员营销小程序开发</li><li>' + cn + '制造企业：产品选型展示网站建设</li></ul>');
+  parts.push('  </div>');
+  parts.push('</section>');
+  parts.push('<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;">');
+  parts.push('  <h2>联系汇智云码（服务' + cn + '客户）</h2>');
+  parts.push('  <div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.8;">');
+  parts.push('    📞 电话/微信咨询，快速响应</p>');
+  parts.push('    📍 服务范围：' + cn + '全市及' + pn + '周边地区</p>');
+  parts.push('    <p><a href="' + SITE + '/contact">立即咨询获取报价 →</a></p>');
+  parts.push('  </div>');
+  parts.push('</section>');
+  return parts.join('\n');
+}
+
+function cityNavBody(provinces) {
+  var gridHtml = '';
+  for (var i = 0; i < provinces.length; i++) {
+    var prov = provinces[i];
+    var cityLinks = prov.cities.map(function(c) {
+      return '<a href="https://' + c.subdomain + '.openai2000.cn/" class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;" style="display:block;padding:12px 16px;background:#fff;border:1px solid #e5e7eb;border-radius:8px;text-align:center;">' + c.name + '</a>';
+    }).join('\n');
+    gridHtml += '<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>' + esc(prov.name) + '</h2><div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;">' + cityLinks + '</div></section>\n';
+  }
+  return '<section class="hero" style="background:linear-gradient(135deg,#1e3a8a,#3730a3,#6d28d9);color:#fff;padding:80px 20px;text-align:center;"><h1>城市服务导航 - 全国小程序开发/APP开发/网站建设服务</h1><p>汇智云码科技覆盖全国300+城市，为您提供专业的小程序开发、APP定制开发、企业网站建设服务。</p></section>\n' + gridHtml;
+}
+
+// ---------- City SEO Pages ----------
+const MAIN_SITE = 'https://openai2000.cn';
+const CITIES_DATA = {"provinces": [{"name": "北京市", "subdomain": "beijing", "cities": [{"name": "北京", "subdomain": "beijing"}]}, {"name": "天津市", "subdomain": "tianjin", "cities": [{"name": "天津", "subdomain": "tianjin"}]}, {"name": "上海市", "subdomain": "shanghai", "cities": [{"name": "上海", "subdomain": "shanghai"}]}, {"name": "重庆市", "subdomain": "chongqing", "cities": [{"name": "重庆", "subdomain": "chongqing"}]}, {"name": "河北省", "subdomain": "hebei", "cities": [{"name": "石家庄", "subdomain": "shijiazhuang"}, {"name": "唐山", "subdomain": "tangshan"}, {"name": "秦皇岛", "subdomain": "qinhuangdao"}, {"name": "邯郸", "subdomain": "handan"}, {"name": "邢台", "subdomain": "xingtai"}, {"name": "保定", "subdomain": "baoding"}, {"name": "张家口", "subdomain": "zhangjiakou"}, {"name": "承德", "subdomain": "chengde"}, {"name": "沧州", "subdomain": "cangzhou"}, {"name": "廊坊", "subdomain": "langfang"}, {"name": "衡水", "subdomain": "hengshui"}]}, {"name": "山西省", "subdomain": "shanxi", "cities": [{"name": "太原", "subdomain": "taiyuan"}, {"name": "大同", "subdomain": "datong"}, {"name": "阳泉", "subdomain": "yangquan"}, {"name": "长治", "subdomain": "changzhi"}, {"name": "晋城", "subdomain": "jincheng"}, {"name": "朔州", "subdomain": "shuozhou"}, {"name": "晋中", "subdomain": "jinzhong"}, {"name": "运城", "subdomain": "yuncheng"}, {"name": "忻州", "subdomain": "xinzhou"}, {"name": "临汾", "subdomain": "linfen"}, {"name": "吕梁", "subdomain": "lvliang"}]}, {"name": "内蒙古自治区", "subdomain": "neimenggu", "cities": [{"name": "呼和浩特", "subdomain": "huhehaote"}, {"name": "包头", "subdomain": "baotou"}, {"name": "乌海", "subdomain": "wuhai"}, {"name": "赤峰", "subdomain": "chifeng"}, {"name": "通辽", "subdomain": "tongliao"}, {"name": "鄂尔多斯", "subdomain": "eerduosi"}, {"name": "呼伦贝尔", "subdomain": "hulunbeier"}, {"name": "巴彦淖尔", "subdomain": "bayannaoer"}, {"name": "乌兰察布", "subdomain": "wulanchabu"}]}, {"name": "辽宁省", "subdomain": "liaoning", "cities": [{"name": "沈阳", "subdomain": "shenyang"}, {"name": "大连", "subdomain": "dalian"}, {"name": "鞍山", "subdomain": "anshan"}, {"name": "抚顺", "subdomain": "fushun"}, {"name": "本溪", "subdomain": "benxi"}, {"name": "丹东", "subdomain": "dandong"}, {"name": "锦州", "subdomain": "jinzhou"}, {"name": "营口", "subdomain": "yingkou"}, {"name": "阜新", "subdomain": "fuxin"}, {"name": "辽阳", "subdomain": "liaoyang"}, {"name": "盘锦", "subdomain": "panjin"}, {"name": "铁岭", "subdomain": "tieling"}, {"name": "朝阳", "subdomain": "chaoyang"}, {"name": "葫芦岛", "subdomain": "huludao"}]}, {"name": "吉林省", "subdomain": "jilin", "cities": [{"name": "长春", "subdomain": "changchun"}, {"name": "吉林", "subdomain": "jilin"}, {"name": "四平", "subdomain": "siping"}, {"name": "辽源", "subdomain": "liaoyuan"}, {"name": "通化", "subdomain": "tonghua"}, {"name": "白山", "subdomain": "baishan"}, {"name": "松原", "subdomain": "songyuan"}, {"name": "白城", "subdomain": "baicheng"}]}, {"name": "黑龙江省", "subdomain": "heilongjiang", "cities": [{"name": "哈尔滨", "subdomain": "haerbin"}, {"name": "齐齐哈尔", "subdomain": "qiqihaer"}, {"name": "鸡西", "subdomain": "jixi"}, {"name": "鹤岗", "subdomain": "hegang"}, {"name": "双鸭山", "subdomain": "shuangyashan"}, {"name": "大庆", "subdomain": "daqing"}, {"name": "伊春", "subdomain": "yichun-hlj"}, {"name": "佳木斯", "subdomain": "jiamusi"}, {"name": "七台河", "subdomain": "qitaihe"}, {"name": "牡丹江", "subdomain": "mudanjiang"}, {"name": "黑河", "subdomain": "heihe"}, {"name": "绥化", "subdomain": "suihua"}]}, {"name": "江苏省", "subdomain": "jiangsu", "cities": [{"name": "南京", "subdomain": "nanjing"}, {"name": "无锡", "subdomain": "wuxi"}, {"name": "徐州", "subdomain": "xuzhou"}, {"name": "常州", "subdomain": "changzhou"}, {"name": "苏州", "subdomain": "suzhou"}, {"name": "南通", "subdomain": "nantong"}, {"name": "连云港", "subdomain": "lianyungang"}, {"name": "淮安", "subdomain": "huaian"}, {"name": "盐城", "subdomain": "yancheng"}, {"name": "扬州", "subdomain": "yangzhou"}, {"name": "镇江", "subdomain": "zhenjiang"}, {"name": "泰州", "subdomain": "taizhou-js"}, {"name": "宿迁", "subdomain": "suqian"}]}, {"name": "浙江省", "subdomain": "zhejiang", "cities": [{"name": "杭州", "subdomain": "hangzhou"}, {"name": "宁波", "subdomain": "ningbo"}, {"name": "温州", "subdomain": "wenzhou"}, {"name": "嘉兴", "subdomain": "jiaxing"}, {"name": "湖州", "subdomain": "huzhou"}, {"name": "绍兴", "subdomain": "shaoxing"}, {"name": "金华", "subdomain": "jinhua"}, {"name": "衢州", "subdomain": "quzhou"}, {"name": "舟山", "subdomain": "zhoushan"}, {"name": "台州", "subdomain": "taizhou"}, {"name": "丽水", "subdomain": "lishui"}]}, {"name": "安徽省", "subdomain": "anhui", "cities": [{"name": "合肥", "subdomain": "hefei"}, {"name": "芜湖", "subdomain": "wuhu"}, {"name": "蚌埠", "subdomain": "bengbu"}, {"name": "淮南", "subdomain": "huainan"}, {"name": "马鞍山", "subdomain": "maanshan"}, {"name": "淮北", "subdomain": "huaibei"}, {"name": "铜陵", "subdomain": "tongling"}, {"name": "安庆", "subdomain": "anqing"}, {"name": "黄山", "subdomain": "huangshan"}, {"name": "滁州", "subdomain": "chuzhou"}, {"name": "阜阳", "subdomain": "fuyang"}, {"name": "宿州", "subdomain": "suzhou-ah"}, {"name": "六安", "subdomain": "luan"}, {"name": "亳州", "subdomain": "bozhou"}, {"name": "池州", "subdomain": "chizhou"}, {"name": "宣城", "subdomain": "xuancheng"}]}, {"name": "福建省", "subdomain": "fujian", "cities": [{"name": "福州", "subdomain": "fuzhou"}, {"name": "厦门", "subdomain": "xiamen"}, {"name": "莆田", "subdomain": "putian"}, {"name": "三明", "subdomain": "sanming"}, {"name": "泉州", "subdomain": "quanzhou"}, {"name": "漳州", "subdomain": "zhangzhou"}, {"name": "南平", "subdomain": "nanping"}, {"name": "龙岩", "subdomain": "longyan"}, {"name": "宁德", "subdomain": "ningde"}]}, {"name": "江西省", "subdomain": "jiangxi", "cities": [{"name": "南昌", "subdomain": "nanchang"}, {"name": "景德镇", "subdomain": "jingdezhen"}, {"name": "萍乡", "subdomain": "pingxiang"}, {"name": "九江", "subdomain": "jiujiang"}, {"name": "新余", "subdomain": "xinyu"}, {"name": "鹰潭", "subdomain": "yingtan"}, {"name": "赣州", "subdomain": "ganzhou"}, {"name": "吉安", "subdomain": "jian"}, {"name": "宜春", "subdomain": "yichun"}, {"name": "抚州", "subdomain": "fuzhou-jx"}, {"name": "上饶", "subdomain": "shangrao"}]}, {"name": "山东省", "subdomain": "shandong", "cities": [{"name": "济南", "subdomain": "jinan"}, {"name": "青岛", "subdomain": "qingdao"}, {"name": "淄博", "subdomain": "zibo"}, {"name": "枣庄", "subdomain": "zaozhuang"}, {"name": "东营", "subdomain": "dongying"}, {"name": "烟台", "subdomain": "yantai"}, {"name": "潍坊", "subdomain": "weifang"}, {"name": "济宁", "subdomain": "jining"}, {"name": "泰安", "subdomain": "taian"}, {"name": "威海", "subdomain": "weihai"}, {"name": "日照", "subdomain": "rizhao"}, {"name": "临沂", "subdomain": "linyi"}, {"name": "德州", "subdomain": "dezhou"}, {"name": "聊城", "subdomain": "liaocheng"}, {"name": "滨州", "subdomain": "binzhou"}, {"name": "菏泽", "subdomain": "heze"}]}, {"name": "河南省", "subdomain": "henan", "cities": [{"name": "郑州", "subdomain": "zhengzhou"}, {"name": "开封", "subdomain": "kaifeng"}, {"name": "洛阳", "subdomain": "luoyang"}, {"name": "平顶山", "subdomain": "pingdingshan"}, {"name": "安阳", "subdomain": "anyang"}, {"name": "新乡", "subdomain": "xinxiang"}, {"name": "焦作", "subdomain": "jiaozuo"}, {"name": "濮阳", "subdomain": "puyang"}, {"name": "许昌", "subdomain": "xuchang"}, {"name": "漯河", "subdomain": "luohe"}, {"name": "三门峡", "subdomain": "sanmenxia"}, {"name": "南阳", "subdomain": "nanyang"}, {"name": "商丘", "subdomain": "shangqiu"}, {"name": "信阳", "subdomain": "xinyang"}, {"name": "周口", "subdomain": "zhoukou"}, {"name": "驻马店", "subdomain": "zhumadian"}]}, {"name": "湖北省", "subdomain": "hubei", "cities": [{"name": "武汉", "subdomain": "wuhan"}, {"name": "黄石", "subdomain": "huangshi"}, {"name": "十堰", "subdomain": "shiyan"}, {"name": "宜昌", "subdomain": "yichang"}, {"name": "襄阳", "subdomain": "xiangyang"}, {"name": "鄂州", "subdomain": "ezhou"}, {"name": "荆门", "subdomain": "jingmen"}, {"name": "孝感", "subdomain": "xiaogan"}, {"name": "荆州", "subdomain": "jingzhou"}, {"name": "黄冈", "subdomain": "huanggang"}, {"name": "咸宁", "subdomain": "xianning"}, {"name": "随州", "subdomain": "suizhou"}]}, {"name": "湖南省", "subdomain": "hunan", "cities": [{"name": "长沙", "subdomain": "changsha"}, {"name": "株洲", "subdomain": "zhuzhou"}, {"name": "湘潭", "subdomain": "xiangtan"}, {"name": "衡阳", "subdomain": "hengyang"}, {"name": "邵阳", "subdomain": "shaoyang"}, {"name": "岳阳", "subdomain": "yueyang"}, {"name": "常德", "subdomain": "changde"}, {"name": "张家界", "subdomain": "zhangjiajie"}, {"name": "益阳", "subdomain": "yiyang"}, {"name": "郴州", "subdomain": "chenzhou"}, {"name": "永州", "subdomain": "yongzhou"}, {"name": "怀化", "subdomain": "huaihua"}, {"name": "娄底", "subdomain": "loudi"}]}, {"name": "广东省", "subdomain": "guangdong", "cities": [{"name": "广州", "subdomain": "guangzhou"}, {"name": "韶关", "subdomain": "shaoguan"}, {"name": "深圳", "subdomain": "shenzhen"}, {"name": "珠海", "subdomain": "zhuhai"}, {"name": "汕头", "subdomain": "shantou"}, {"name": "佛山", "subdomain": "foshan"}, {"name": "江门", "subdomain": "jiangmen"}, {"name": "湛江", "subdomain": "zhanjiang"}, {"name": "茂名", "subdomain": "maoming"}, {"name": "肇庆", "subdomain": "zhaoqing"}, {"name": "惠州", "subdomain": "huizhou"}, {"name": "梅州", "subdomain": "meizhou"}, {"name": "汕尾", "subdomain": "shanwei"}, {"name": "河源", "subdomain": "heyuan"}, {"name": "阳江", "subdomain": "yangjiang"}, {"name": "清远", "subdomain": "qingyuan"}, {"name": "东莞", "subdomain": "dongguan"}, {"name": "中山", "subdomain": "zhongshan"}, {"name": "潮州", "subdomain": "chaozhou"}, {"name": "揭阳", "subdomain": "jieyang"}, {"name": "云浮", "subdomain": "yunfu"}]}, {"name": "广西壮族自治区", "subdomain": "guangxi", "cities": [{"name": "南宁", "subdomain": "nanning"}, {"name": "柳州", "subdomain": "liuzhou"}, {"name": "桂林", "subdomain": "guilin"}, {"name": "梧州", "subdomain": "wuzhou"}, {"name": "北海", "subdomain": "beihai"}, {"name": "防城港", "subdomain": "fangchenggang"}, {"name": "钦州", "subdomain": "qinzhou"}, {"name": "贵港", "subdomain": "guigang"}, {"name": "玉林", "subdomain": "yulin-gx"}, {"name": "百色", "subdomain": "baise"}, {"name": "贺州", "subdomain": "hezhou"}, {"name": "河池", "subdomain": "hechi"}, {"name": "来宾", "subdomain": "laibin"}, {"name": "崇左", "subdomain": "chongzuo"}]}, {"name": "海南省", "subdomain": "hainan", "cities": [{"name": "海口", "subdomain": "haikou"}, {"name": "三亚", "subdomain": "sanya"}, {"name": "三沙", "subdomain": "sansha"}, {"name": "儋州", "subdomain": "danzhou"}]}, {"name": "四川省", "subdomain": "sichuan", "cities": [{"name": "成都", "subdomain": "chengdu"}, {"name": "自贡", "subdomain": "zigong"}, {"name": "攀枝花", "subdomain": "panzhihua"}, {"name": "泸州", "subdomain": "luzhou"}, {"name": "德阳", "subdomain": "deyang"}, {"name": "绵阳", "subdomain": "mianyang"}, {"name": "广元", "subdomain": "guangyuan"}, {"name": "遂宁", "subdomain": "suining"}, {"name": "内江", "subdomain": "neijiang"}, {"name": "乐山", "subdomain": "leshan"}, {"name": "南充", "subdomain": "nanchong"}, {"name": "眉山", "subdomain": "meishan"}, {"name": "宜宾", "subdomain": "yibin"}, {"name": "广安", "subdomain": "guangan"}, {"name": "达州", "subdomain": "dazhou"}, {"name": "雅安", "subdomain": "yaan"}, {"name": "巴中", "subdomain": "bazhong"}, {"name": "资阳", "subdomain": "ziyang"}]}, {"name": "贵州省", "subdomain": "guizhou", "cities": [{"name": "贵阳", "subdomain": "guiyang"}, {"name": "六盘水", "subdomain": "liupanshui"}, {"name": "遵义", "subdomain": "zunyi"}, {"name": "安顺", "subdomain": "anshun"}, {"name": "毕节", "subdomain": "bijie"}, {"name": "铜仁", "subdomain": "tongren"}]}, {"name": "云南省", "subdomain": "yunnan", "cities": [{"name": "昆明", "subdomain": "kunming"}, {"name": "曲靖", "subdomain": "qujing"}, {"name": "玉溪", "subdomain": "yuxi"}, {"name": "保山", "subdomain": "baoshan"}, {"name": "昭通", "subdomain": "zhaotong"}, {"name": "丽江", "subdomain": "lijiang"}, {"name": "普洱", "subdomain": "puer"}, {"name": "临沧", "subdomain": "lincang"}]}, {"name": "西藏自治区", "subdomain": "xizang", "cities": [{"name": "拉萨", "subdomain": "lasa"}, {"name": "日喀则", "subdomain": "rikaze"}, {"name": "昌都", "subdomain": "changdu"}, {"name": "林芝", "subdomain": "linzhi"}]}, {"name": "陕西省", "subdomain": "shaanxi", "cities": [{"name": "西安", "subdomain": "xian"}, {"name": "铜川", "subdomain": "tongchuan"}, {"name": "宝鸡", "subdomain": "baoji"}, {"name": "咸阳", "subdomain": "xianyang"}, {"name": "渭南", "subdomain": "weinan"}, {"name": "延安", "subdomain": "yanan"}, {"name": "汉中", "subdomain": "hanzhong"}, {"name": "榆林", "subdomain": "yulin"}, {"name": "安康", "subdomain": "ankang"}, {"name": "商洛", "subdomain": "shangluo"}]}, {"name": "甘肃省", "subdomain": "gansu", "cities": [{"name": "兰州", "subdomain": "lanzhou"}, {"name": "嘉峪关", "subdomain": "jiayuguan"}, {"name": "金昌", "subdomain": "jinchang"}, {"name": "白银", "subdomain": "baiyin"}, {"name": "天水", "subdomain": "tianshui"}, {"name": "武威", "subdomain": "wuwei"}, {"name": "张掖", "subdomain": "zhangye"}, {"name": "平凉", "subdomain": "pingliang"}, {"name": "酒泉", "subdomain": "jiuquan"}, {"name": "庆阳", "subdomain": "qingyang"}, {"name": "定西", "subdomain": "dingxi"}, {"name": "陇南", "subdomain": "longnan"}]}, {"name": "青海省", "subdomain": "qinghai", "cities": [{"name": "西宁", "subdomain": "xining"}, {"name": "海东", "subdomain": "haidong"}]}, {"name": "宁夏回族自治区", "subdomain": "ningxia", "cities": [{"name": "银川", "subdomain": "yinchuan"}, {"name": "石嘴山", "subdomain": "shizuishan"}, {"name": "吴忠", "subdomain": "wuzhong"}, {"name": "固原", "subdomain": "guyuan"}, {"name": "中卫", "subdomain": "zhongwei"}]}, {"name": "新疆维吾尔自治区", "subdomain": "xinjiang", "cities": [{"name": "乌鲁木齐", "subdomain": "wulumuqi"}, {"name": "克拉玛依", "subdomain": "kelamayi"}, {"name": "吐鲁番", "subdomain": "tulufan"}, {"name": "哈密", "subdomain": "hami"}]}, {"name": "台湾省", "subdomain": "taiwan", "cities": [{"name": "台北", "subdomain": "taibei"}, {"name": "高雄", "subdomain": "gaoxiong"}, {"name": "台中", "subdomain": "taizhong"}]}, {"name": "香港特别行政区", "subdomain": "hongkong", "cities": [{"name": "香港", "subdomain": "hongkong"}]}, {"name": "澳门特别行政区", "subdomain": "aomen", "cities": [{"name": "澳门", "subdomain": "aomen"}]}]};
+
+
+// ===== SPA city index.html generator =====
+function generateSpaIndex(indexPath, cityName, subdomain) {
+  var SITE_BASE = 'https://' + subdomain + '.openai2000.cn';
+  var html = fs.readFileSync(indexPath, 'utf-8');
+  html = html.replace(
+    /<title>[\s\S]*?<\/title>/,
+    '<title>' + cityName + '小程序开发_企业建站_APP开发 - 汇智云码科技</title>'
+  );
+  html = html.replace(
+    /<meta name="description" content="[^"]*">/,
+    '<meta name="description" content="汇智云码科技面向' + cityName + '及周边企业提供微信小程序开发、APP定制开发、企业网站建设服务。120+企业客户，200+成功案例，源码交付，免费报价。">'
+  );
+  html = html.replace(
+    /<meta name="keywords" content="[^"]*">/,
+    '<meta name="keywords" content="' + cityName + '小程序开发,' + cityName + 'APP开发,' + cityName + '网站建设,' + cityName + '软件开发公司,微信小程序定制,APP定制开发">'
+  );
+  html = html.replace(
+    /<meta property="og:title" content="[^"]*">/,
+    '<meta property="og:title" content="汇智云码科技 - 专业App/小程序定制开发 | ' + cityName + '软件开发公司">'
+  );
+  html = html.replace(
+    /<meta property="og:description" content="[^"]*">/,
+    '<meta property="og:description" content="' + cityName + '专业软件开发公司，120+企业客户，200+成功案例。专注微信小程序、APP定制开发、企业网站建设。">'
+  );
+  html = html.replace(
+    /<meta property="og:url" content="[^"]*">/,
+    '<meta property="og:url" content="' + SITE_BASE + '/">'
+  );
+  html = html.replace(
+    /<link rel="canonical" href="[^"]*">/,
+    '<link rel="canonical" href="' + SITE_BASE + '/">'
+  );
+  return html;
+}
+
+function cityPage(subdomain, cityName, provName, page, opts) {
+  var SITE_BASE = "https://" + subdomain + ".openai2000.cn";
+  var MAIN_SITE = "https://openai2000.cn";
+  var title = opts.title || "";
+  var description = opts.description || "";
+  var keywords = opts.keywords || "";
+  var body = opts.body || "";
+  var jsonLd = opts.jsonLd || "";
+  var canonical = SITE_BASE + "/" + (page === "index" ? "" : page);
+  jsonLd = (jsonLd || "") + cityBreadcrumbLd(subdomain, page);
+  var robots = opts.robots || (PRIORITY_CITIES[subdomain] ? "index,follow" : "noindex,follow");
+
+  var navItems = [
+    {path: "/", label: "\u9996\u9875"},
+    {path: "/services", label: "\u670d\u52a1"},
+    {path: "/cases", label: "\u6848\u4f8b"},
+    {path: "https://openai2000.cn/templates", label: "\u6a21\u677f\u5546\u57ce"},
+    {path: "/articles", label: "\u8d44\u8baf"},
+    {path: "/about", label: "\u5173\u4e8e"},
+    {path: "https://openai2000.cn/packages", label: "\u670d\u52a1\u5957\u9910"},
+    {path: "/contact", label: "\u8054\u7cfb"}
+  ];
+  var currentPage = page === "index" ? "/" : "/" + page;
+  var navHtml = navItems.map(function(item) {
+    var activeClass = (item.path === currentPage) ? ' class="active"' : '';
+    var href = item.path.startsWith('http') ? item.path : SITE_BASE + item.path;
+    return '<a href="' + href + '"' + activeClass + '>' + item.label + '</a>';
+  }).join("\n        ");
+
+  var html = '<!DOCTYPE html>\n<html lang="zh-CN">\n<head>\n'
+    + '<meta charset="UTF-8">\n'
+    + '<meta name="baidu-site-verification" content="codeva-geushDpNvl" />\n'
+    + '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
+    + '<title>' + esc(title) + '</title>\n'
+    + '<meta name="description" content="' + esc(description) + '" />\n'
+    + '<meta name="keywords" content="' + esc(keywords) + '" />\n'
+    + '<link rel="canonical" href="' + canonical + '" />\n'
+    + '<meta property="og:title" content="' + esc(title) + '" />\n'
+    + '<meta property="og:description" content="' + esc(description) + '" />\n'
+    + '<meta property="og:type" content="website" />\n'
+    + '<meta property="og:url" content="' + canonical + '" />\n'
+    + '<meta name="robots" content="' + robots + '" />\n'
+    + '<link rel="icon" type="image/svg+xml" href="' + MAIN_SITE + '/favicon.svg">\n'
+    + '<link rel="stylesheet" href="' + MAIN_SITE + '/assets/' + MAIN_CSS + '">\n'
+    + '<script>var _hmt=_hmt||[];(function(){var hm=document.createElement("script");hm.src="https://hm.baidu.com/hm.js?289eab39430e2f97aa77b242004802b3";var s=document.getElementsByTagName("script")[0];s.parentNode.insertBefore(hm,s);})();</script>\n'
+    + jsonLd + '\n</head>\n<body>\n'
+    // Header - matches main site structure
+    + '<header class="site-header"><div class="container"><div class="header-inner">\n'
+    + '<a href="' + SITE_BASE + '/" class="logo">\n'
+    + '  <div class="logo-icon">\u6c47</div>\n'
+    + '  <div class="logo-text"><strong>\u6c47\u667a\u4e91\u7801\u79d1\u6280</strong><em>HUIZHIYUNMA</em></div>\n'
+    + '</a>\n'
+    + '<nav class="nav">\n        ' + navHtml + '\n    </nav>\n'
+    + '</div></div></header>\n'
+    // Main content
+    + '<main>' + body + '</main>\n'
+    // Footer - matches main site structure
+    + '<footer class="site-footer"><div class="container">\n'
+    + '<div class="footer-grid">\n'
+    + '  <div class="footer-col">\n'
+    + '    <h4>\u6c47\u667a\u4e91\u7801\u79d1\u6280</h4>\n'
+    + '    <p>\u4e13\u4e1a\u63d0\u4f9b\u5fae\u4fe1\u5c0f\u7a0b\u5e8f\u5f00\u53d1\u3001APP\u5b9a\u5236\u5f00\u53d1\u3001\u4f01\u4e1a\u7f51\u7ad9\u5efa\u8bbe\u670d\u52a1\u3002</p>\n'
+    + '  </div>\n'
+    + '  <div class="footer-col">\n'
+    + '    <h4>\u670d\u52a1</h4>\n'
+    + '    <ul><li><a href="' + SITE_BASE + '/services">\u5c0f\u7a0b\u5e8f\u5f00\u53d1</a></li>\n'
+    + '    <li><a href="' + SITE_BASE + '/services">APP\u5b9a\u5236\u5f00\u53d1</a></li>\n'
+    + '    <li><a href="' + SITE_BASE + '/services">\u7f51\u7ad9\u5efa\u8bbe</a></li></ul>\n'
+    + '  </div>\n'
+    + '  <div class="footer-col">\n'
+    + '    <h4>\u8d44\u6e90</h4>\n'
+    + '    <ul><li><a href="' + SITE_BASE + '/cases">\u5f00\u53d1\u6848\u4f8b</a></li>\n'
+    + '    <li><a href="' + SITE_BASE + '/articles">\u6280\u672f\u8d44\u8baf</a></li>\n'
+    + '    <li><a href="' + SITE_BASE + '/templates">\u7f51\u7ad9\u6a21\u677f</a></li></ul>\n'
+    + '  </div>\n'
+    + '  <div class="footer-col">\n'
+    + '    <h4>\u8054\u7cfb\u6211\u4eec</h4>\n'
+    + '    <p>\u83b7\u53d6\u514d\u8d39\u65b9\u6848\u4e0e\u62a5\u4ef7</p>\n'
+    + '    <a href="' + SITE_BASE + '/contact" class="btn btn-primary">\u7acb\u5373\u54a8\u8be2</a>\n'
+    + '  </div>\n'
+    + '</div>\n'
+    + '<div class="copyright-links" style="margin-top:10px"><a href="https://ai.openai2000.cn">智云互联AI - AI工具导航与实操教程</a></div>\n'
+    + '<div class="copyright">\n'
+    + '  <p>\u00a9 2026 \u6c47\u667a\u4e91\u7801\u79d1\u6280 \u7248\u6743\u6240\u6709</p>\n'
+    + (FOOTER_ICP ? '  <p><a href="https://beian.miit.gov.cn/" target="_blank" rel="nofollow noopener">' + esc(FOOTER_ICP) + '</a></p>\n' : '')
+    + '</div>\n'
+    + '</div></footer>\n'
+    + '</body>\n</html>';
+
+  return html;
+}
+
+function cityHomeBody(cn, services, cases, articles, templates, cityObj, provName) {
+  var cfg = cityObj ? PRIORITY_CITIES[cityObj.subdomain] : null;
+  var block = cfg ? cityLocalBlock(cfg, cn, provName, cityObj.subdomain) : null;
+  if (cfg) cases = pickLocalCases(cases, cfg.inds, 6);
+  var svcs = services.map(function(s) { return '<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3>' + esc(s.title) + '</h3><p>' + esc(trunc(s.description, 120)) + '</p></article>'; }).join("\n");
+  var cHtml = cases.slice(0, 6).map(function(c) { return '<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3><a href="' + SITE + '/cases/' + c.id + '">' + esc(c.title) + '</a></h3><p class="meta" style="color:#6b7280;font-size:14px;">' + esc(c.client || '') + '</p><p>' + esc(trunc(c.description, 100)) + '</p></article>'; }).join("\n");
+  var aHtml = articles.slice(0, 6).map(function(a) { return '<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3><a href="' + SITE + '/articles/' + a.id + '">' + esc(a.title) + '</a></h3><p class="meta" style="color:#6b7280;font-size:14px;">' + (a.published_at ? String(a.published_at).slice(0,10) : '') + '</p><p>' + esc(trunc(a.summary, 80)) + '</p></article>'; }).join("\n");
+  var tHtml = templates.map(function(t) { return '<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3>' + esc(t.name) + '</h3><p class="price" style="color:#dc2626;font-weight:600;font-size:16px;">\u00a5' + Number(t.price).toFixed(0) + '</p><p>' + esc(t.description || '') + '</p></article>'; }).join("\n");
+  var ct = casesCountText();
+  var parts = [];
+  parts.push('<section class="hero" style="background:linear-gradient(135deg,#1e3a8a,#3730a3,#6d28d9);color:#fff;padding:80px 20px;text-align:center;">');
+  parts.push('  <h1>' + cn + '\u5c0f\u7a0b\u5e8f\u5f00\u53d1_' + cn + 'APP\u5b9a\u5236\u5f00\u53d1_' + cn + '\u4f01\u4e1a\u7f51\u7ad9\u5efa\u8bbe</h1>');
+  parts.push('  <p>汇智云码科技面向' + cn + '及周边企业，专注微信小程序开发、APP定制开发、企业网站建设。' + ct + '成功案例，源码交付，终身维护。</p>');
+  parts.push('  <p style="margin-top:18px;"><a href="' + SITE + '/contact" style="display:inline-block;padding:10px 24px;background:#2563eb;color:#fff;border-radius:8px;font-weight:bold;text-decoration:none;">\u514d\u8d39\u83b7\u53d6' + cn + '\u5f00\u53d1\u65b9\u6848</a></p>');
+  parts.push('</section>');
+  parts.push('<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>' + cn + '\u6838\u5fc3\u670d\u52a1</h2><div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;">' + svcs + '</div></section>');
+  parts.push('<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>' + cn + '\u6210\u529f\u6848\u4f8b</h2>' + cHtml + '</section>');
+  parts.push('<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>' + cn + '\u4f01\u4e1a\u7f51\u7ad9\u6a21\u677f</h2><div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;">' + tHtml + '</div></section>');
+  parts.push('<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>' + cn + '\u6700\u65b0\u8d44\u8baf</h2>' + aHtml + '</section>');
+  parts.push('<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>\u4e3a\u4ec0\u4e48\u9009\u62e9\u6c47\u667a\u4e91\u7801\u79d1\u6280\uff1f</h2><div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.8;">');
+  parts.push('    <p>\u6c47\u667a\u4e91\u7801\u79d1\u6280\u6210\u7acb\u4e8e2020\u5e74\uff0c\u603b\u90e8\u4f4d\u4e8e\u9752\u5c9b\uff0c\u6838\u5fc3\u56e2\u961f\u6765\u81ea\u817e\u8baf\u3001\u963f\u91cc\u3001\u5b57\u8282\u3002\u6211\u4eec\u5728' + cn + '\u63d0\u4f9b\u4e13\u4e1a\u7684\u5c0f\u7a0b\u5e8f\u5f00\u53d1\u3001APP\u5b9a\u5236\u5f00\u53d1\u548c\u4f01\u4e1a\u7f51\u7ad9\u5efa\u8bbe\u670d\u52a1\u3002</p>');
+  parts.push('    <p>\u5df2\u670d\u52a1120+\u4f01\u4e1a\u5ba2\u6237\uff0c\u7d2f\u8ba1\u4ea4\u4ed8' + ct + '\u4e2a\u9879\u76ee\u3002\u6e90\u7801\u4ea4\u4ed8\uff0c\u7ec8\u8eab\u7ef4\u62a4\uff0c\u4ef7\u683c\u900f\u660e\u3002</p>');
+  parts.push('  </div></section>');
+  if (block) parts.push(block.html);
+  parts.push(cityCrossLinks(cityObj.subdomain));
+  return parts.join("\n");
+}
+
+function cityServicesBody(sd, cn, services) {
+  var cfg = PRIORITY_CITIES[sd];
+  var intro = "从需求分析到上线运营的一站式数字化解决方案。";
+  if (cfg && cfg.inds) {
+    var inds = cfg.inds.join('、');
+    intro = "面向" + cn + "本地" + inds + "等产业，提供从需求分析到上线运营的一站式数字化定制开发服务。";
+  }
+  var svcs = services.map(function(s) { return '<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3>' + esc(s.title) + '</h3><p class="price" style="color:#dc2626;font-weight:600;font-size:16px;">\u53c2\u8003\u4ef7\u683c\uff1a\u00a5' + Number(s.price_min).toLocaleString() + ' - \u00a5' + Number(s.price_max).toLocaleString() + '</p><p>' + esc(trunc(s.description, 150)) + '</p></article>'; }).join("\n");
+  return '<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>' + cn + '\u4f01\u4e1a\u5efa\u7ad9 \u00b7 \u5c0f\u7a0b\u5e8f \u00b7 APP\u5f00\u53d1\u670d\u52a1</h1><p>' + intro + '</p></section><section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;">' + svcs + '</div></section>';
+}
+
+function cityCasesBody(sd, cn, cases) {
+  var cfg = PRIORITY_CITIES[sd];
+  var filtered = cases;
+  if (cfg && cfg.inds) {
+    filtered = pickLocalCases(cases, cfg.inds, 100);
+    if (filtered.length > 0) cases = filtered;
+  }
+  var ct = casesCountText();
+  var intro = ct + '成功案例，覆盖餐饮、制造、教育、医疗、跨境、酒店等多个行业。';
+  if (cfg && cfg.inds) {
+    var indsText = cfg.inds.join('、');
+    intro = cn + '本地' + cases.length + '个成功案例，覆盖' + indsText + '等本地重点产业。';
+  }
+  var items = cases.slice(0, 16).map(function(c) { return '<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3><a href="' + SITE + '/cases/' + c.id + '">' + esc(c.title) + '</a></h3><p class="meta" style="color:#6b7280;font-size:14px;">' + esc(c.category) + ' \u00b7 ' + esc(c.client) + '</p><p>' + esc(trunc(c.description, 100)) + '</p></article>'; }).join("\n");
+  return '<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>' + cn + '\u5f00\u53d1\u6848\u4f8b</h1><p>' + intro + '</p></section>' + items;
+}
+
+function cityArticlesBody(cn, articles) {
+  var items = articles.map(function(a) { return '<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3><a href="' + SITE + '/articles/' + a.id + '">' + esc(a.title) + '</a></h3><p class="meta" style="color:#6b7280;font-size:14px;">' + esc(a.category) + ' \u00b7 ' + (a.published_at ? String(a.published_at).slice(0,10) : '') + '</p><p>' + esc(trunc(a.summary, 80)) + '</p></article>'; }).join("\n");
+  return '<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>' + cn + '\u884c\u4e1a\u8d44\u8baf\u4e0e\u5f00\u53d1\u77e5\u8bc6</h1><p>\u7f51\u7ad9\u5efa\u8bbe\u3001\u5c0f\u7a0b\u5e8f\u5f00\u53d1\u3001APP\u5f00\u53d1\u7684\u6280\u672f\u5e72\u8d27\u4e0e\u884c\u4e1a\u8d8b\u52bf\u3002</p></section>' + items;
+}
+
+function cityAboutBody(cn, info) {
+  var intro = info ? (info.company_intro || "") : "";
+  return '<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>\u5173\u4e8e\u6c47\u667a\u4e91\u7801\u79d1\u6280</h1><p>' + cn + '\u8f6f\u4ef6\u5f00\u53d1\u516c\u53f8\uff0c\u56e2\u961f\u6838\u5fc3\u6210\u5458\u6765\u81ea\u817e\u8baf\u3001\u963f\u91cc\u3001\u5b57\u8282\u3002</p></section><section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.8;">' + intro + '</div></section>';
+}
+
+function cityTemplatesBody(cn, templates) {
+  var items = templates.map(function(t) { return '<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3>' + esc(t.name) + '</h3><p class="price" style="color:#dc2626;font-weight:600;font-size:16px;">\u4ef7\u683c\uff1a<strong>\u00a5' + Number(t.price).toFixed(0) + '</strong></p><p>' + esc(t.description || '') + '</p></article>'; }).join("\n");
+  return '<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>' + cn + '\u4f01\u4e1a\u7f51\u7ad9\u6a21\u677f\u5546\u57ce</h1><p>\u7cbe\u9009\u4f01\u4e1a\u7ea7\u7f51\u7ad9\u6a21\u677f\uff0c\u8d2d\u4e70\u540e\u6e90\u7801\u4ea4\u4ed8\uff0c\u652f\u6301\u4e8c\u6b21\u5f00\u53d1\u3002</p></section><section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;">' + items + '</div></section>';
+}
+
+function cityPackagesBody(cn, packages) {
+  if (!packages || packages.length === 0) return '<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>' + cn + '\u8f6f\u4ef6\u5f00\u53d1\u5957\u9910</h1><p>\u7f51\u7ad9\u5efa\u8bbe\u3001\u5c0f\u7a0b\u5e8f\u3001APP\u6807\u51c6\u5316\u5f00\u53d1\u5957\u9910\uff0c\u660e\u7801\u6807\u4ef7\u3002</p></section>';
+  var bizMap = { website: "\u7f51\u7ad9\u5efa\u8bbe", miniapp: "\u5c0f\u7a0b\u5e8f", app: "APP\u5f00\u53d1" };
+  var group = {};
+  for (var i = 0; i < packages.length; i++) {
+    var p = packages[i];
+    var k = bizMap[p.biz_type] || p.biz_type;
+    if (!group[k]) group[k] = [];
+    group[k].push(p);
+  }
+  var html = '<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>' + cn + '\u8f6f\u4ef6\u5f00\u53d1\u5957\u9910 \u00b7 \u660e\u7801\u6807\u4ef7</h1><p>\u6309\u884c\u4e1a\u6807\u51c6\u5316\u914d\u7f6e\uff0c\u660e\u7801\u6807\u4ef7\u3002</p></section>';
+  var types = Object.keys(group);
+  for (var t = 0; t < types.length; t++) {
+    var type = types[t];
+    var list = group[type];
+    var items = list.map(function(p) { return '<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3>' + esc(p.name) + '(' + esc(p.industry) + ')</h3><p class="price" style="color:#dc2626;font-weight:600;font-size:16px;">\u660e\u7801\u6807\u4ef7\uff1a<strong>\u00a5' + Number(p.price).toFixed(0) + '</strong></p><p>' + esc((p.features || "").split("|").slice(0, 4).join("\u3001")) + '</p></article>'; }).join("\n");
+    html += '<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><h2>' + type + '\u5f00\u53d1\u5957\u9910</h2><div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;">' + items + '</div></section>';
+  }
+  return html;
+}
+
+function cityContactBody(cn, info) {
+  var phone = info && (info.company_phone || info.phone) ? esc(info.company_phone || info.phone) : "";
+  var wechat = info && (info.company_wechat || info.wechat) ? esc(info.company_wechat || info.wechat) : "";
+  var address = info && (info.company_address || info.address) ? esc(info.company_address || info.address) : "\u5c71\u4e1c\u9752\u5c9b";
+  var email = info && (info.company_email || info.email) ? esc(info.company_email || info.email) : "";
+  var cm = getMobile(info);
+  var cmMask = cm ? esc(maskMobile(cm)) : "";
+  var cmData = cm ? (cm.slice(0,3)+'-'+cm.slice(3,7)+'-'+cm.slice(7)) : "";
+  var parts = [];
+  if (cm) parts.push('<p>📱 手机/微信同号（点击拨打）：<a href="#" data-tel="'+cmData+'" class="js-tel" style="font-size:20px;font-weight:bold;color:#1d4ed8;">'+cmMask+'</a></p>');
+  if (cm) parts.push('<'+'script>(function(){var a=document.querySelector(".js-tel");if(a){a.addEventListener("click",function(e){e.preventDefault();location.href="tel:"+this.getAttribute("data-tel").replace(/\D/g,"");});}})();<'+'/script>');
+  parts.push('<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>' + cn + '\u8054\u7cfb\u6211\u4eec</h1><p>\u83b7\u53d6\u4f01\u4e1a\u7f51\u7ad9\u5efa\u8bbe\u3001\u5c0f\u7a0b\u5e8f\u5f00\u53d1\u3001APP\u5b9a\u5236\u5f00\u53d1\u65b9\u6848\u4e0e\u62a5\u4ef7\u3002</p></section>');
+  parts.push('<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;"><div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.8;">');
+  if (phone) parts.push('<p>\ud83d\udc27 QQ\uff1a' + phone + '</p>');
+  if (wechat && wechat !== "\u626b\u4e8c\u7ef4\u7801") parts.push('<p>\ud83d\udcac \u5fae\u4fe1\uff1a' + wechat + '</p>');
+  if (email) parts.push('<p>\ud83d\udce7 \u90ae\u7bb1\uff1a<a href="mailto:' + email + '">' + email + '</a></p>');
+  parts.push('<p>\ud83d\udccd \u5730\u5740\uff1a' + address + '</p>');
+  parts.push('<p>\ud83d\udcf7 \u5fae\u4fe1\u626b\u7801\u54a8\u8be2\uff1a<br><img src="https://openai2000.cn/uploads/wechat_qr.png" alt="\u6c47\u667a\u4e91\u7801\u79d1\u6280\u5fae\u4fe1\u4e8c\u7ef4\u7801" style="width:160px;height:160px;border-radius:8px;margin-top:8px;"></p>');
+  parts.push('</div></section>');
+  return parts.join("\n");
+}
+
+// ---------- main flow ----------
+(async () => {
+  try {
+    const pool = await getPool();
+    const [services] = await pool.query('SELECT * FROM services WHERE status=1 ORDER BY sort_order');
+    const [cases] = await pool.query('SELECT * FROM cases WHERE status=1 ORDER BY sort_order, id');
+    const [articles] = await pool.query('SELECT * FROM articles WHERE status=1 ORDER BY id');
+    const [[{ caseTotal }]] = await pool.query('SELECT COUNT(*) AS caseTotal FROM cases WHERE status=1');
+    CASES_TOTAL = caseTotal;
+    const [companyRows] = await pool.query('SELECT * FROM company_info');
+    const info = {};
+    for (const r of companyRows) info[r.item_key] = r.item_value;
+    FOOTER_ICP = (info.icp_record || '').trim();
+    FOOTER_BEIAN = (info.public_security || '').trim();
+    // templates 在 pay_system 库，单独查
+    const payPool = await mysql.createPool({
+      host: process.env.PAY_DB_HOST || process.env.DB_HOST,
+      port: process.env.PAY_DB_PORT || process.env.DB_PORT,
+      user: process.env.PAY_DB_USER || 'pay_system',
+      password: process.env.PAY_DB_PASSWORD || 'PaySystem@2026',
+      database: process.env.PAY_DB_NAME || 'pay_system_db',
+      charset: 'utf8mb4',
+      connectionLimit: 2,
+    });
+    const [templates] = await payPool.query('SELECT * FROM templates WHERE status=1 ORDER BY sort_order');
+    const [packages] = await pool.query('SELECT * FROM service_packages WHERE status=1 ORDER BY biz_type, FIELD(industry,"电商","餐饮","美容预约","教育","同城服务","通用"), FIELD(level,"basic","pro","flagship")');
+    // 行业方案数据（用于文章页内链推荐）
+    const solutions = INDUSTRIES.map(ind => ({ name: ind.name, slug: ind.slug, industry: ind.name, description: ind.description, summary: ind.description }));
+
+    // 0) 生成/补齐案例封面占位图（首页、cases 栏目页、case 详情页生成前调用）
+    ensureCaseImages(cases);
+
+    // 1) 静态页（首页用 index.seo.html，避免覆盖 SPA 的 index.html；由 nginx 对爬虫 rewrite）
+    const pages = [
+      { file: 'index.seo.html',   html: seoPage('/', { title: '汇智云码科技 - 小程序开发_APP定制_企业建站', keywords: '小程序开发,APP开发,企业网站建设,软件开发,青岛软件公司', description: `汇智云码科技专业提供微信小程序开发、APP定制开发、企业网站建设服务。青岛软件开发公司，120+企业客户，${casesCountText()}成功案例，源码交付终身维护。`, body: homeBody(services, cases, articles, templates), isHome: true, jsonLd: orgJsonLd(info) + websiteJsonLd() + faqJsonLd() }) },
+      { file: 'services.html', html: seoPage('/services', { title: '小程序开发_APP定制_企业建站服务 - 汇智云码', keywords: '小程序开发,APP定制开发,企业网站建设,SaaS开发,软件开发公司', description: '汇智云码科技提供APP定制开发、微信小程序开发、企业网站建设一站式服务，从需求分析到上线运营全程交付，价格透明快速响应。', body: servicesBody(services), jsonLd: serviceJsonLd('汇智云码科技提供APP定制开发、微信小程序开发、企业网站建设一站式服务，从需求分析到上线运营全程交付，价格透明快速响应。') }) },
+      { file: 'cases.html',    html: seoPage('/cases', { title: '开发案例_小程序APP网站成功案例 - 汇智云码', keywords: '小程序开发案例,APP开发案例,网站建设案例,软件开发案例', description: `汇智云码科技${casesCountText()}成功案例，涵盖微信小程序、APP定制开发、企业网站建设等多个行业，见证真实开发实力。`, body: casesBody(cases), jsonLd: orgJsonLd(info) }) },
+      { file: 'about.html',    html: seoPage('/about', { title: '关于汇智云码_青岛专业软件开发公司', keywords: '软件开发公司,APP开发公司,小程序开发公司,汇智云码科技', description: '汇智云码科技是青岛专业软件开发公司，核心团队来自腾讯、阿里、字节，专注小程序开发、企业网站建设、APP定制开发，已服务120+企业客户。', body: aboutBody(info), jsonLd: orgJsonLd(info) }) },
+      { file: 'templates.html', html: seoPage('/templates', { title: '企业网站模板_建站模板_快速建站_汇智云码', keywords: '企业网站模板,建站模板,快速建站,网站模板,企业官网模板', description: '汇智云码科技提供企业官网HTML模板，基础版¥599、专业版¥899、至尊版¥1599，纯源码交付，含在线演示，快速搭建专业企业网站。', body: templatesBody(templates), jsonLd: collectionPageJsonLd("企业网站模板", "汇智云码科技企业官网HTML模板商城，源码交付，含在线演示。") }) },
+      { file: 'packages.html', html: seoPage('/packages', { title: '软件开发套餐_网站建设小程序APP价格_明码标价_汇智云码', keywords: '软件开发套餐,网站建设价格,小程序开发价格,APP开发价格,建站多少钱', description: '汇智云码科技标准化软件开发套餐：网站建设¥1999起、小程序¥2999起、APP开发¥15999起，按行业配置明码标价，在线直接下单，价格透明，源码交付。', body: packagesBody(packages) }) },
+      { file: 'articles.html',  html: seoPage('/articles', { title: '小程序开发知识_网站建设教程_开发资讯_汇智云码', keywords: '小程序开发知识,网站建设教程,APP开发,软件开发资讯', description: '汇智云码科技分享小程序开发、APP开发、企业网站建设的技术干货与行业趋势，助力企业数字化转型。', body: articlesBody(articles), jsonLd: orgJsonLd(info) }) },
+      { file: 'contact.html',   html: seoPage('/contact', { title: '联系我们_获取开发方案与报价 - 汇智云码', keywords: '软件开发咨询,小程序开发报价,APP开发报价', description: '联系汇智云码科技，获取小程序开发、APP定制开发、企业网站建设报价与方案。电话/微信/在线咨询，快速响应。', body: contactBody(info), jsonLd: localBusinessJsonLd(info) + orgJsonLd(info) }) },
+      { file: '404.html',      html: seoPage('/404', { title: '页面不存在_汇智云码科技', keywords: '页面不存在,404', description: '您访问的页面不存在或已被移除，请返回首页继续浏览，或查看我们的服务与资讯。', body: '<section class="hero" style="background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:60px 20px;text-align:center;"><h1>404 - 页面不存在</h1><p>您访问的页面不存在或已被移除。</p><p><a href="' + SITE + '/">返回首页</a> · <a href="' + SITE + '/services">查看服务</a> · <a href="' + SITE + '/articles">浏览资讯</a></p></section>' }) },
+    ];
+
+    // 2) 动态详情页（写进 seo/ 子目录，由 nginx 映射）
+    const dynamicPages = [];
+    for (const c of cases) {
+      dynamicPages.push({ dir: ['seo', 'cases'], file: `${c.id}.html`, html: seoPage(`/cases/${c.id}`, { title: `${truncTitle(c.title, 40)}_开发案例_汇智云码`, description: trunc(c.description, 120), body: caseBody(c), jsonLd: caseJsonLd(c) }) });
+    }
+    for (const a of articles) {
+      dynamicPages.push({ dir: ['seo', 'articles'], file: `${a.id}.html`, html: seoPage(`/articles/${a.id}`, { title: `${truncTitle(a.title, 45)}_汇智云码`, description: trunc(a.summary, 120), body: articleBody(a, articles, cases, solutions), jsonLd: articleJsonLd(a) }) });
+    }
+
+    // Generate SPA pages for main site routes (services, cases, about, templates, packages, contact)
+    // Read main index.html template for SPA page generation
+    var mainIndex = fs.readFileSync(path.join(DIST, 'index.html'), 'utf-8');
+    
+    var mainPages = [
+      { file: 'services_spa.html', title: '小程序开发_APP定制_企业建站服务 - 汇智云码科技', description: '汇智云码科技提供APP定制开发、微信小程序开发、企业网站建设一站式服务，从需求分析到上线运营全程交付。', keywords: '小程序开发,APP定制开发,企业网站建设,SaaS开发' },
+      { file: 'cases_spa.html', title: '小程序开发案例_APP开发案例_网站建设案例 | 汇智云码科技', description: '汇智云码科技200+成功案例，涵盖微信小程序、APP定制开发、企业网站建设等多个行业。', keywords: '小程序开发案例,APP开发案例,网站建设案例,软件开发案例' },
+      { file: 'about_spa.html', title: '关于汇智云码_青岛APP开发公司_软件开发公司', description: '汇智云码科技是青岛专业软件开发公司，核心团队来自腾讯、阿里、字节，已服务120+企业客户。', keywords: '青岛软件开发公司,APP开发公司,小程序开发公司,汇智云码科技' },
+      { file: 'templates_spa.html', title: '企业网站模板_建站模板_快速建站 | 汇智云码科技', description: '汇智云码科技提供企业官网HTML模板，基础版¥599、专业版¥899，纯源码交付。', keywords: '企业网站模板,建站模板,快速建站,网站模板' },
+      { file: 'packages_spa.html', title: '软件开发套餐_网站建设价格_小程序开发报价 | 汇智云码科技', description: '标准化软件开发套餐：网站建设¥1999起、小程序¥2999起、APP开发¥15999起，价格透明。', keywords: '软件开发价格,网站建设报价,小程序开发费用,APP开发多少钱' },
+      { file: 'contact_spa.html', title: '联系我们_获取开发方案与报价 - 汇智云码科技', description: '联系汇智云码科技，获取小程序开发、APP定制开发、企业网站建设报价与方案。', keywords: '软件开发咨询,小程序开发报价,APP开发咨询' },
+      { file: 'articles_spa.html', title: '小程序开发知识_网站建设教程_开发资讯 | 汇智云码科技', description: '分享小程序开发、APP开发、企业网站建设的技术干货与行业趋势。', keywords: '小程序开发教程,APP开发知识,网站建设教程,软件开发资讯' },
+    ];
+    for (const mp of mainPages) {
+      var mHtml = mainIndex;
+      mHtml = mHtml.replace(/<title>[\s\S]*?<\/title>/, '<title>' + esc(mp.title) + '<\/title>');
+      mHtml = mHtml.replace(/<meta name="description" content="[^"]*">/, '<meta name="description" content="' + esc(mp.description) + '">');
+      mHtml = mHtml.replace(/<meta name="keywords" content="[^"]*">/, '<meta name="keywords" content="' + esc(mp.keywords) + '">');
+      mHtml = mHtml.replace(/<meta property="og:title" content="[^"]*">/, '<meta property="og:title" content="' + esc(mp.title) + '">');
+      mHtml = mHtml.replace(/<meta property="og:description" content="[^"]*">/, '<meta property="og:description" content="' + esc(mp.description) + '">');
+      mHtml = mHtml.replace(/<meta property="og:url" content="[^"]*">/, '<meta property="og:url" content="https://openai2000.cn/' + mp.file.replace('_spa.html', '') + '">');
+      mHtml = mHtml.replace(/<link rel="canonical" href="[^"]*">/, '<link rel="canonical" href="https://openai2000.cn/' + mp.file.replace('_spa.html', '') + '">');
+      fs.writeFileSync(path.join(DIST, mp.file), mHtml);
+    }
+    console.log('  - Main SPA pages: ' + mainPages.length + ' 个');
+
+    // Generate SPA index for each article (correct SEO meta for browsers)
+    var articleSpaDir = path.join(DIST, 'articles');
+    fs.mkdirSync(articleSpaDir, { recursive: true });
+    for (const a of articles) {
+      var aHtml = mainIndex;
+      aHtml = aHtml.replace(/<title>[\s\S]*?<\/title>/, '<title>' + esc(a.title) + ' | 汇智云码科技</title>');
+      aHtml = aHtml.replace(/<meta name=\"description\" content=\"[^\"]*\">/, '<meta name=\"description\" content=\"' + esc(trunc(a.summary, 150)) + '\">');
+      aHtml = aHtml.replace(/<meta name=\"keywords\" content=\"[^\"]*\">/, '<meta name=\"keywords\" content=\"' + esc(a.keywords || a.category + ',' + a.title) + '\">');
+      aHtml = aHtml.replace(/<meta property=\"og:title\" content=\"[^\"]*\">/, '<meta property=\"og:title\" content=\"' + esc(a.title) + ' | 汇智云码科技\">');
+      aHtml = aHtml.replace(/<meta property=\"og:description\" content=\"[^\"]*\">/, '<meta property=\"og:description\" content=\"' + esc(trunc(a.summary, 150)) + '\">');
+      aHtml = aHtml.replace(/<meta property=\"og:url\" content=\"[^\"]*\">/, '<meta property=\"og:url\" content=\"https://openai2000.cn/articles/' + a.id + '\">');
+      aHtml = aHtml.replace(/<link rel=\"canonical\" href=\"[^\"]*\">/, '<link rel=\"canonical\" href=\"https://openai2000.cn/articles/' + a.id + '\">');
+      var aDir = path.join(articleSpaDir, String(a.id));
+      fs.mkdirSync(aDir, { recursive: true });
+      fs.writeFileSync(path.join(aDir, 'spa_index.html'), aHtml);
+    }
+    console.log('  - 文章 SPA 页面：' + articles.length + ' 个');
+
+    // Generate SPA index for each case too
+    var caseSpaDir = path.join(DIST, 'cases');
+    fs.mkdirSync(caseSpaDir, { recursive: true });
+    for (const c of cases) {
+      var cHtml = mainIndex;
+      cHtml = cHtml.replace(/<title>[\s\S]*?<\/title>/, '<title>' + esc(c.title) + ' | 汇智云码科技</title>');
+      cHtml = cHtml.replace(/<meta name=\"description\" content=\"[^\"]*\">/, '<meta name=\"description\" content=\"' + esc(trunc(c.description, 150)) + '\">');
+      cHtml = cHtml.replace(/<meta name=\"keywords\" content=\"[^\"]*\">/, '<meta name=\"keywords\" content=\"' + esc(c.keywords || c.title + ',开发案例') + '\">');
+      cHtml = cHtml.replace(/<meta property=\"og:title\" content=\"[^\"]*\">/, '<meta property=\"og:title\" content=\"' + esc(c.title) + ' | 汇智云码科技\">');
+      cHtml = cHtml.replace(/<meta property=\"og:description\" content=\"[^\"]*\">/, '<meta property=\"og:description\" content=\"' + esc(trunc(c.description, 150)) + '\">');
+      cHtml = cHtml.replace(/<meta property=\"og:url\" content=\"[^\"]*\">/, '<meta property=\"og:url\" content=\"https://openai2000.cn/cases/' + c.id + '\">');
+      cHtml = cHtml.replace(/<link rel=\"canonical\" href=\"[^\"]*\">/, '<link rel=\"canonical\" href=\"https://openai2000.cn/cases/' + c.id + '\">');
+      var cDir = path.join(caseSpaDir, String(c.id));
+      fs.mkdirSync(cDir, { recursive: true });
+      fs.writeFileSync(path.join(cDir, 'spa_index.html'), cHtml);
+    }
+    console.log('  - 案例 SPA 页面：' + cases.length + ' 个');
+
+    // 3.5) City subdomain pages
+    var cityDir = path.join(DIST, 'city');
+    fs.mkdirSync(cityDir, { recursive: true });
+    var cityCount = 0;
+    for (var pi = 0; pi < CITIES_DATA.provinces.length; pi++) {
+      var prov = CITIES_DATA.provinces[pi];
+      for (var ci = 0; ci < prov.cities.length; ci++) {
+        var city = prov.cities[ci];
+        var cityHtml = seoPage('/', {
+          title: city.name + '小程序开发_' + city.name + 'APP定制开发_' + city.name + '企业网站建设_汇智云码科技',
+          keywords: city.name + '小程序开发,' + city.name + 'APP开发,' + city.name + '网站建设,' + city.name + '软件开发公司,' + prov.name + '小程序开发',
+          description: '汇智云码科技面向' + city.name + '及' + prov.name + '企业提供微信小程序开发、APP定制开发、企业网站建设服务，' + casesCountText() + '成功案例，源码交付终身维护。',
+          canonical: 'https://' + city.subdomain + '.openai2000.cn/',
+          body: cityBody(city, prov, services, cases),
+          jsonLd: orgJsonLd(info),
+          robots: PRIORITY_CITIES[city.subdomain] ? 'index,follow' : 'noindex,follow',
+        });
+        fs.writeFileSync(path.join(cityDir, city.subdomain + '.html'), cityHtml);
+        cityCount++;
+      }
+    }
+
+    // 3.6) City navigation page
+    var cityNavHtml = seoPage('/city', {
+      title: '城市服务导航_全国小程序开发/APP开发/网站建设_汇智云码科技',
+      keywords: '小程序开发城市,APP开发城市,网站建设城市,全国软件开发,各城市小程序开发',
+      description: '汇智云码科技覆盖全国300+城市，提供专业的小程序开发、APP定制开发、企业网站建设服务。查找您所在城市的服务。',
+      body: cityNavBody(CITIES_DATA.provinces),
+    });
+    fs.writeFileSync(path.join(DIST, 'city.html'), cityNavHtml);
+
+    // 3.5) City subdomain pages (multi-page)
+    var cityPageCount = 0;
+    for (var pi = 0; pi < CITIES_DATA.provinces.length; pi++) {
+      var prov = CITIES_DATA.provinces[pi];
+      for (var ci = 0; ci < prov.cities.length; ci++) {
+        var city = prov.cities[ci];
+        var sd = city.subdomain;
+        var cn = city.name;
+        var pn = prov.name;
+        var cityDir = path.join(DIST, 'city', sd);
+        fs.mkdirSync(cityDir, { recursive: true });
+        (function(){
+        var pcfg = PRIORITY_CITIES[sd];
+        var desc = '汇智云码科技面向' + cn + '及' + pn + '企业提供微信小程序开发、APP定制开发、企业网站建设服务，' + casesCountText() + '成功案例，源码交付终身维护。';
+        var body = cityHomeBody(cn, services, cases, articles, templates, city, pn);
+        var extra = pcfg ? cityLocalBlock(pcfg, cn, pn, sd).faqLd : '';
+        fs.writeFileSync(path.join(cityDir, 'index.html'), cityPage(sd, cn, pn, 'index', { title: cn + '小程序开发_企业建站_APP开发 - 汇智云码科技', keywords: cn + '小程序开发,' + cn + 'APP开发,' + cn + '网站建设,' + cn + '软件开发公司,' + pn + '软件开发', description: desc, body: body, jsonLd: orgJsonLd(info) + extra }));
+      })();
+        // Generate SPA-compatible index.html for this city
+        var spaHtml = generateSpaIndex(path.join(DIST, 'index.html'), cn, sd);
+        fs.writeFileSync(path.join(cityDir, 'spa_index.html'), spaHtml);
+
+        fs.writeFileSync(path.join(cityDir, 'services.html'), cityPage(sd, cn, pn, 'services', { title: cn + '服务项目 - 小程序开发_APP开发_网站建设', keywords: cn + '小程序开发,' + cn + 'APP开发,' + cn + '网站建设', description: '汇智云码科技面向' + cn + '客户提供小程序、APP、企业建站一站式数字化解决方案。', body: cityServicesBody(sd, cn, services) }));
+        fs.writeFileSync(path.join(cityDir, 'cases.html'), cityPage(sd, cn, pn, 'cases', { title: cn + '开发案例 - 小程序开发_APP开发', keywords: cn + '小程序开发案例,' + cn + 'APP开发案例', description: '汇智云码科技' + casesCountText() + '成功案例。', body: cityCasesBody(sd, cn, cases) }));
+        fs.writeFileSync(path.join(cityDir, 'about.html'), cityPage(sd, cn, pn, 'about', { title: cn + '软件开发公司 - 关于汇智云码科技', keywords: cn + '软件开发公司,' + cn + 'APP开发公司', description: '汇智云码科技总部位于山东青岛，面向' + cn + '及' + pn + '提供软件开发服务。', body: cityAboutBody(cn, info) }));
+        fs.writeFileSync(path.join(cityDir, 'templates.html'), cityPage(sd, cn, pn, 'templates', { title: cn + '企业网站模板 - 建站模板', keywords: cn + '企业网站模板,' + cn + '建站模板', description: '汇智云码科技面向' + cn + '客户提供企业官网HTML模板，源码交付。', body: cityTemplatesBody(cn, templates) }));
+        fs.writeFileSync(path.join(cityDir, 'packages.html'), cityPage(sd, cn, pn, 'packages', { title: cn + '软件开发套餐 - 网站建设价格', keywords: cn + '软件开发套餐,' + cn + '网站建设价格', description: '汇智云码科技面向' + cn + '客户的小程序/APP/建站标准化套餐，明码标价。', body: cityPackagesBody(cn, packages) }));
+        fs.writeFileSync(path.join(cityDir, 'articles.html'), cityPage(sd, cn, pn, 'articles', { title: cn + '小程序开发知识 - 资讯', keywords: cn + '小程序开发知识,' + cn + '网站建设教程', description: '汇智云码科技面向' + cn + '客户分享小程序开发、企业建站技术干货与资讯。', body: cityArticlesBody(cn, articles) }));
+        fs.writeFileSync(path.join(cityDir, 'contact.html'), cityPage(sd, cn, pn, 'contact', { title: cn + '联系我们 - 小程序开发_APP开发', keywords: cn + '小程序开发,' + cn + 'APP开发,' + cn + '网站建设', description: '联系汇智云码科技，获取面向' + cn + '的小程序/APP/建站开发方案与报价。', body: cityContactBody(cn, info) }));
+        cityPageCount++;
+      }
+    }
+
+    // 3.6) City navigation page
+    var cityNavHtml = seoPage('/city', { title: '城市服务导航_全国小程序开发/APP开发/网站建设_汇智云码科技', keywords: '小程序开发城市,APP开发城市', description: '汇智云码科技覆盖全国300+城市。', body: cityNavBody(CITIES_DATA.provinces), jsonLd: collectionPageJsonLd('城市服务导航','汇智云码科技全国小程序开发、APP定制开发、企业网站建设城市服务导航') });
+    fs.writeFileSync(path.join(DIST, 'city.html'), cityNavHtml);
+
+// 3.1) 行业解决方案页面
+    // 3) 收集所有 URL 生成 sitemap
+    const urls = ['/', '/services', '/cases', '/about', '/templates', '/packages', '/articles', '/contact'];
+    cases.forEach(c => urls.push(`/cases/${c.id}`));
+    articles.forEach(a => urls.push(`/articles/${a.id}`));
+    // City subdomain URLs (use subdomain format for SEO)
+    for (var pi = 0; pi < CITIES_DATA.provinces.length; pi++) {
+    // 3.1) 行业解决方案页面
+    console.log("  - 生成行业解决方案页面...");
+    const industryUrls = generateIndustryPages(services, cases, info);
+    industryUrls.forEach(url => urls.push(url));
+    console.log("  - 行业解决方案页面：" + (industryUrls.length - 1) + " 个");
+      for (var ci = 0; ci < CITIES_DATA.provinces[pi].cities.length; ci++) {
+        var cs = CITIES_DATA.provinces[pi].cities[ci].subdomain;
+        if (!PRIORITY_CITIES[cs]) continue;
+        urls.push('https://' + cs + '.openai2000.cn/');
+        urls.push('https://' + cs + '.openai2000.cn/services');
+        urls.push('https://' + cs + '.openai2000.cn/cases');
+        urls.push('https://' + cs + '.openai2000.cn/about');
+        urls.push('https://' + cs + '.openai2000.cn/templates');
+        urls.push('https://' + cs + '.openai2000.cn/packages');
+        urls.push('https://' + cs + '.openai2000.cn/articles');
+        urls.push('https://' + cs + '.openai2000.cn/contact');
+      }
+    }
+
+
+    const sitemap = buildSitemap(urls);
+    // 同时生成一份 www 主域的（robots 里声明的是 www）
+    fs.writeFileSync(path.join(DIST, 'sitemap.xml'), sitemap);
+
+    // 拆分 sitemap：主站 + 文章 + 案例（百度按文件优先级抓取）
+    const mainUrls = urls.filter(u => !u.startsWith('/articles/') && !u.startsWith('/cases/'));
+    const articleUrls = urls.filter(u => u.startsWith('/articles/'));
+    const caseUrls = urls.filter(u => u.startsWith('/cases/'));
+    fs.writeFileSync(path.join(DIST, 'sitemap-articles.xml'), buildSitemap(articleUrls));
+    fs.writeFileSync(path.join(DIST, 'sitemap-cases.xml'), buildSitemap(caseUrls));
+
+    // 生成 robots.txt（指向真实 sitemap，屏蔽后台）
+    fs.writeFileSync(path.join(DIST, 'robots.txt'), `User-agent: *\nAllow: /\nDisallow: /admin\n\nSitemap: ${SITE}/sitemap.xml\nSitemap: ${SITE}/sitemap-articles.xml\nSitemap: ${SITE}/sitemap-cases.xml\n`);
+
+    // 4) 写静态页
+    const knownNames = new Set(pages.map(p => p.file));
+    for (const p of pages) {
+      fs.writeFileSync(path.join(DIST, p.file), p.html);
+    }
+
+    // 5) 写动态页
+    for (const dp of dynamicPages) {
+      const dir = path.join(DIST, ...dp.dir);
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(path.join(dir, dp.file), dp.html);
+    }
+
+    // 6) SEO CSS
+    fs.writeFileSync(path.join(DIST, 'seo.css'), SEO_CSS);
+
+    console.log('✅ 生成完成');
+    console.log(`   - 静态页：${pages.map(p => p.file).join(', ')}`);
+    console.log(`   - 案例页：${cases.length} 个`);
+    console.log(`   - 城市子站页面：${cityPageCount} 个城市 x 8 页面`);
+    console.log(`   - 文章页：${articles.length} 个`);
+    console.log(`   - sitemap URL：${urls.length} 条`);
+
+    // Generate favicon.svg
+    var faviconSvg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">\n  <rect width="100" height="100" rx="20" fill="#1E40AF"/>\n  <text x="50" y="65" font-size="52" text-anchor="middle" fill="white" font-family="sans-serif" font-weight="bold">汇</text>\n</svg>';
+    fs.writeFileSync(path.join(DIST, 'favicon.svg'), faviconSvg);
+
+    // Generate og-cover.png (minimal valid PNG - blue rectangle)
+    var zlib = require('zlib');
+    function crc32(buf) {
+      var table = new Int32Array(256);
+      for (var i = 0; i < 256; i++) {
+        var c = i;
+        for (var j = 0; j < 8; j++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+        table[i] = c;
+      }
+      var crc = -1;
+      for (var i = 0; i < buf.length; i++) crc = (crc >>> 8) ^ table[(crc ^ buf[i]) & 0xff];
+      return (crc ^ (-1)) >>> 0;
+    }
+    function makeOgPng(w, h) {
+      function makeChunk(type, data) {
+        var buf = Buffer.concat([Buffer.from(type), data]);
+        var crcVal = crc32(buf);
+        var lenBuf = Buffer.alloc(4);
+        lenBuf.writeUInt32BE(data.length, 0);
+        var crcBuf = Buffer.alloc(4);
+        crcBuf.writeUInt32BE(crcVal, 0);
+        return Buffer.concat([lenBuf, buf, crcBuf]);
+      }
+      var ihdr = Buffer.alloc(13);
+      ihdr.writeUInt32BE(w, 0);
+      ihdr.writeUInt32BE(h, 4);
+      ihdr[8] = 8; ihdr[9] = 2;
+      var raw = [];
+      for (var y = 0; y < h; y++) {
+        raw.push(0);
+        for (var x = 0; x < w; x++) {
+          raw.push(30, 64, 175);
+        }
+      }
+      var compressed = zlib.deflateSync(Buffer.from(raw));
+      var sig = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+      return Buffer.concat([sig, makeChunk('IHDR', ihdr), makeChunk('IDAT', compressed), makeChunk('IEND', Buffer.alloc(0))]);
+    }
+    var ogDir = path.join(DIST, 'seo', 'images');
+    fs.mkdirSync(ogDir, { recursive: true });
+    fs.writeFileSync(path.join(ogDir, 'og-cover.png'), makeOgPng(200, 105));
+
+    pool.end();
+    payPool.end();
+  } catch (e) {
+    console.error('❌ 生成失败：', e);
+    process.exit(1);
+  }
+})();
+
+const SEO_CSS = `/* SEO 静态页样式 */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;color:#1f2937;line-height:1.7;background:#f9fafb}
+a{color:#1e40af;text-decoration:none}
+a:hover{text-decoration:underline}
+.seo-header{background:#111827;color:#fff;padding:16px 0}
+.seo-wrap{max-width:1100px;margin:0 auto;padding:0 20px}
+.seo-logo{font-size:20px;font-weight:800;color:#fff}
+.seo-nav{margin-top:10px;display:flex;flex-wrap:wrap;gap:16px}
+.seo-nav a{color:#d1d5db;font-size:14px}
+.seo-main{min-height:60vh}
+.seo-hero{background:linear-gradient(135deg,#1e3a8a,#3730a3,#6d28d9);color:#fff;padding:56px 20px;text-align:center}
+.seo-hero h1{font-size:30px;margin-bottom:14px}
+.seo-hero p{max-width:760px;margin:0 auto;opacity:.9}
+.seo-section{max-width:1100px;margin:0 auto;padding:36px 20px}
+.seo-section h2{font-size:24px;margin-bottom:20px;color:#111827;position:relative}
+.seo-page-cover{background:linear-gradient(135deg,#111827,#1e3a8a);color:#fff;padding:44px 20px;text-align:center}
+.seo-page-cover h1{font-size:28px;margin-bottom:12px}
+.seo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:20px}
+.seo-card{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:20px}
+.seo-card h3{font-size:17px;margin-bottom:8px}
+.seo-card p{font-size:14px;color:#4b5563}
+.seo-card-img{width:100%;height:auto;border-radius:8px;margin-bottom:14px;display:block}
+.seo-case-img{width:100%;max-width:900px;height:auto;border-radius:12px;margin:0 auto 24px;display:block;box-shadow:0 8px 24px rgba(0,0,0,.08)}
+.seo-meta{color:#6b7280;font-size:13px}
+.seo-price{color:#dc2626;font-weight:600}
+.seo-price strong{font-size:18px}
+.seo-content{background:#fff;border:1px solid #e5e7eb;border-radius:10px;padding:28px}
+.seo-content p{margin-bottom:14px}
+.seo-breadcrumb{max-width:1100px;margin:0 auto;padding:18px 20px 0;font-size:13px;color:#6b7280}
+.seo-breadcrumb a{color:#1d4ed8}
+.seo-footer{background:#111827;color:#9ca3af;padding:28px 0;text-align:center;font-size:13px;margin-top:40px}
+.seo-footer a{color:#d1d5db}
+.city-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px}
+
+`;
+
+// ---------- 行业解决方案页面生成 ----------
+function industryBody(industry, services, cases) {
+  const name = industry.name;
+  const slug = industry.slug;
+  const keywords = industry.keywords;
+  const desc = industry.description;
+  const relatedServices = industry.services;
+  
+  // 筛选相关案例
+  const relatedCases = cases.filter(c => {
+    const text = (c.title + ' ' + (c.description || '') + ' ' + (c.category || '')).toLowerCase();
+    return keywords.some(kw => text.includes(kw.toLowerCase()));
+  }).slice(0, 6);
+  
+  const svcs = relatedServices.map(s => 
+    '<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3>' + esc(s) + '</h3><p>专业' + name + '行业数字化解决方案，助力企业转型升级。</p></article>'
+  ).join('\n');
+  
+  const cHtml = relatedCases.map(c => 
+    '<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;transition:all .3s;"><h3><a href="' + SITE + '/cases/' + c.id + '">' + esc(c.title) + '</a></h3><p class="meta" style="color:#6b7280;font-size:14px;">' + esc(c.client || '') + '</p><p>' + esc(trunc(c.description, 100)) + '</p></article>'
+  ).join('\n');
+  
+  const parts = [];
+  parts.push('<section class="hero" style="background:linear-gradient(135deg,#1e3a8a,#3730a3,#6d28d9);color:#fff;padding:80px 20px;text-align:center;">');
+  parts.push('  <h1>' + name + '行业解决方案 - 小程序/APP/网站开发</h1>');
+  parts.push('  <p>汇智云码科技为' + name + '行业提供专业的数字化解决方案，' + desc + '</p>');
+  parts.push('  <p style="margin-top:18px;"><a href="' + SITE + '/contact" style="display:inline-block;padding:10px 24px;background:#2563eb;color:#fff;border-radius:8px;font-weight:bold;text-decoration:none;">获取' + name + '行业方案</a></p>');
+  parts.push('</section>');
+  
+  parts.push('<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;">');
+  parts.push('  <h2>' + name + '行业核心服务</h2>');
+  parts.push('  <div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;">');
+  parts.push('    ' + svcs);
+  parts.push('  </div>');
+  parts.push('</section>');
+  
+  if (relatedCases.length > 0) {
+    parts.push('<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;">');
+    parts.push('  <h2>' + name + '行业成功案例</h2>');
+    parts.push('  ' + cHtml);
+    parts.push('</section>');
+  }
+  
+  parts.push('<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;">');
+  parts.push('  <h2>为什么选择汇智云码？</h2>');
+  parts.push('  <div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.8;">');
+  parts.push('    <p>汇智云码科技深耕' + name + '行业数字化转型，拥有丰富的行业经验和成功案例。我们理解' + name + '行业的特殊需求，提供从需求分析到上线运营的一站式服务。</p>');
+  parts.push('    <p>我们的优势：行业经验丰富、技术架构先进、源码交付、终身维护、价格透明。</p>');
+  parts.push('  </div>');
+  parts.push('</section>');
+  
+  parts.push('<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;">');
+  parts.push('  <h2>获取' + name + '行业方案</h2>');
+  parts.push('  <div class="content" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:32px;line-height:1.8;text-align:center;">');
+  parts.push('    <p>如果您需要' + name + '行业的数字化解决方案，欢迎联系我们获取专属方案和报价。</p>');
+  parts.push('    <p><a href="' + SITE + '/contact" style="display:inline-block;padding:12px 32px;background:#2563eb;color:#fff;border-radius:8px;font-weight:bold;text-decoration:none;">立即咨询</a></p>');
+  parts.push('  </div>');
+  parts.push('</section>');
+  
+  return parts.join('\n');
+}
+
+// 行业数据定义
+const INDUSTRIES = [
+  {
+    name: '餐饮',
+    slug: 'catering',
+    keywords: ['餐饮', '点餐', '外卖', '扫码点餐', '餐厅'],
+    description: '扫码点餐小程序、外卖配送系统、会员管理、库存管理等数字化解决方案。',
+    services: ['扫码点餐小程序', '外卖配送系统', '会员营销系统', '库存管理系统']
+  },
+  {
+    name: '零售',
+    slug: 'retail',
+    keywords: ['零售', '商城', '电商', '分销', '购物'],
+    description: '微信商城小程序、分销裂变系统、库存管理、会员营销等数字化解决方案。',
+    services: ['微信商城小程序', '分销裂变系统', '库存管理系统', '会员营销系统']
+  },
+  {
+    name: '教育',
+    slug: 'education',
+    keywords: ['教育', '培训', '在线教育', '知识付费', '课程'],
+    description: '在线教育平台、知识付费系统、课程管理系统、学员管理系统等数字化解决方案。',
+    services: ['在线教育平台', '知识付费系统', '课程管理系统', '学员管理系统']
+  },
+  {
+    name: '医疗',
+    slug: 'medical',
+    keywords: ['医疗', '健康', '医院', '诊所', '预约挂号'],
+    description: '预约挂号系统、健康管理平台、在线问诊系统、患者管理系统等数字化解决方案。',
+    services: ['预约挂号系统', '健康管理平台', '在线问诊系统', '患者管理系统']
+  },
+  {
+    name: '房产',
+    slug: 'realestate',
+    keywords: ['房产', '楼盘', '中介', '二手房', '新房'],
+    description: '楼盘展示系统、VR看房、房产中介管理系统、预约看房等数字化解决方案。',
+    services: ['楼盘展示系统', 'VR看房系统', '中介管理系统', '预约看房系统']
+  },
+  {
+    name: '汽车',
+    slug: 'automotive',
+    keywords: ['汽车', '4S店', '二手车', '维修', '保养'],
+    description: '4S店管理系统、二手车交易平台、维修保养预约、车主会员系统等数字化解决方案。',
+    services: ['4S店管理系统', '二手车交易平台', '维修保养预约', '车主会员系统']
+  },
+  {
+    name: '旅游',
+    slug: 'tourism',
+    keywords: ['旅游', '景区', '酒店', '民宿', '行程'],
+    description: '景区导览系统、酒店预订平台、行程规划系统、门票预订等数字化解决方案。',
+    services: ['景区导览系统', '酒店预订平台', '行程规划系统', '门票预订系统']
+  },
+  {
+    name: '酒店',
+    slug: 'hotel',
+    keywords: ['酒店', '民宿', '预订', '住宿'],
+    description: '酒店预订系统、客房管理系统、会员管理系统、在线支付等数字化解决方案。',
+    services: ['酒店预订系统', '客房管理系统', '会员管理系统', '在线支付系统']
+  },
+  {
+    name: '美业',
+    slug: 'beauty',
+    keywords: ['美业', '美容', '美发', '美甲', 'SPA'],
+    description: '预约管理系统、会员营销系统、员工管理系统、库存管理系统等数字化解决方案。',
+    services: ['预约管理系统', '会员营销系统', '员工管理系统', '库存管理系统']
+  },
+  {
+    name: '家政',
+    slug: 'housekeeping',
+    keywords: ['家政', '保洁', '保姆', '月嫂', '维修'],
+    description: '服务预约系统、人员调度系统、订单管理系统、会员管理系统等数字化解决方案。',
+    services: ['服务预约系统', '人员调度系统', '订单管理系统', '会员管理系统']
+  },
+  {
+    name: '婚庆',
+    slug: 'wedding',
+    keywords: ['婚庆', '婚纱', '摄影', '婚礼策划'],
+    description: '场地预约系统、案例展示系统、客户管理系统、在线支付等数字化解决方案。',
+    services: ['场地预约系统', '案例展示系统', '客户管理系统', '在线支付系统']
+  },
+  {
+    name: '物流',
+    slug: 'logistics',
+    keywords: ['物流', '快递', '货运', '仓储'],
+    description: '运单跟踪系统、车队管理系统、仓储管理系统、客户管理系统等数字化解决方案。',
+    services: ['运单跟踪系统', '车队管理系统', '仓储管理系统', '客户管理系统']
+  },
+  {
+    name: '农业',
+    slug: 'agriculture',
+    keywords: ['农业', '农产品', '溯源', '种植', '养殖'],
+    description: '农产品溯源系统、电商平台、种植管理系统、供应链管理等数字化解决方案。',
+    services: ['农产品溯源系统', '电商平台', '种植管理系统', '供应链管理系统']
+  },
+  {
+    name: '制造业',
+    slug: 'manufacturing',
+    keywords: ['制造', '工厂', '生产', '设备', '供应链'],
+    description: '设备管理系统、生产管理系统、供应链管理系统、质量追溯系统等数字化解决方案。',
+    services: ['设备管理系统', '生产管理系统', '供应链管理系统', '质量追溯系统']
+  }
+];
+
+// 生成行业解决方案页面
+function generateIndustryPages(services, cases, info) {
+  const outDir = path.join(DIST, 'solutions');
+  fs.mkdirSync(outDir, { recursive: true });
+  
+  const industryUrls = [];
+  
+  INDUSTRIES.forEach(ind => {
+    const html = seoPage('/solutions/' + ind.slug, {
+      title: ind.name + '行业解决方案 - 小程序/APP/网站开发 - 汇智云码',
+      keywords: ind.name + '小程序开发,' + ind.name + 'APP开发,' + ind.name + '网站开发,' + ind.name + '行业数字化',
+      description: '汇智云码科技为' + ind.name + '行业提供专业的数字化解决方案，' + ind.description,
+      canonical: SITE + '/solutions/' + ind.slug,
+      body: industryBody(ind, services, cases),
+      jsonLd: orgJsonLd(info) + '<script type="application/ld+json">{"@context":"https://schema.org","@type":"Service","name":"' + ind.name + '行业解决方案","description":"' + ind.description + '","provider":{"@type":"Organization","name":"汇智云码科技"}}</script>'
+    });
+    
+    fs.writeFileSync(path.join(outDir, ind.slug + '.html'), html);
+    industryUrls.push('/solutions/' + ind.slug);
+    console.log('   - 生成行业解决方案: solutions/' + ind.slug + '.html');
+  });
+  
+  // 生成行业导航页
+  const navHtml = '<section class="hero" style="background:linear-gradient(135deg,#1e3a8a,#3730a3,#6d28d9);color:#fff;padding:80px 20px;text-align:center;"><h1>行业解决方案 - 数字化转型</h1><p>汇智云码科技为各行业提供专业的数字化解决方案</p></section>' +
+    '<section class="section" style="max-width:1200px;margin:0 auto;padding:60px 20px;">' +
+    '<div class="grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:24px;">' +
+    INDUSTRIES.map(ind => '<article class="card" style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px;"><h3><a href="' + SITE + '/solutions/' + ind.slug + '">' + ind.name + '行业解决方案</a></h3><p>' + ind.description + '</p></article>').join('\n') +
+    '</div></section>';
+  
+  const navPage = seoPage('/solutions', {
+    title: '行业解决方案 - 数字化转型 - 汇智云码科技',
+    keywords: '行业解决方案,数字化转型,小程序开发,APP开发',
+    description: '汇智云码科技为餐饮、零售、教育、医疗等14个行业提供专业的数字化解决方案。',
+    canonical: SITE + '/solutions',
+    body: navHtml
+  });
+  
+  fs.writeFileSync(path.join(outDir, 'index.html'), navPage);
+  industryUrls.push('/solutions');
+  console.log('   - 生成行业导航页: solutions/index.html');
+  
+  return industryUrls;
+}
+
+// ---------- HowTo Schema 生成 ----------
+function howToSchema(title, steps) {
+  return '<script type="application/ld+json">' + JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'HowTo',
+    name: title,
+    step: steps.map((s, i) => ({
+      '@type': 'HowToStep',
+      position: i + 1,
+      name: s.title,
+      text: s.content
+    }))
+  }) + '</script>';
+}
+
+// 检测是否为教程类文章
+function isTutorialArticle(title) {
+  const tutorialKeywords = ['流程', '步骤', '教程', '指南', '怎么做', '如何', '开发', '搭建', '配置', '部署'];
+  return tutorialKeywords.some(kw => title.includes(kw));
+}
+
+// 从文章内容提取步骤
+function extractSteps(content) {
+  const steps = [];
+  const lines = content.split('\n');
+  let currentStep = null;
+  
+  lines.forEach(line => {
+    const match = line.match(/^[一二三四五六七八九十]+[、.]|^\d+[、.]|第[一二三四五六七八九十]+步/);
+    if (match) {
+      if (currentStep) steps.push(currentStep);
+      currentStep = { title: line.trim(), content: '' };
+    } else if (currentStep && line.trim()) {
+      currentStep.content += line.trim() + ' ';
+    }
+  });
+  
+  if (currentStep) steps.push(currentStep);
+  return steps.length >= 2 ? steps : null;
+}
+
+// ---------- 面包屑 Schema 生成 ----------
+function breadcrumbSchema(items) {
+  return '<script type="application/ld+json">' + JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((item, i) => ({
+      '@type': 'ListItem',
+      position: i + 1,
+      name: item.name,
+      item: item.url
+    }))
+  }) + '</script>';
+}
+
+// ---------- 客户评价模块 ----------
+function reviewSection(caseData) {
+  return `
+  <section class="reviews" style="margin-top:40px;">
+    <h2>客户评价</h2>
+    <div class="review-card" style="background:#f8fafc;padding:24px;border-radius:12px;margin:16px 0;">
+      <div class="stars" style="color:#f59e0b;font-size:24px;">★★★★★</div>
+      <p style="margin:12px 0;font-size:16px;line-height:1.8;">
+        "与汇智云码合作非常愉快，开发周期短、质量高、售后响应快。强烈推荐！"
+      </p>
+      <p style="color:#6b7280;">—— ${esc(caseData.client || '客户')} 项目负责人</p>
+    </div>
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "name": "${esc(caseData.title)}",
+      "review": {
+        "@type": "Review",
+        "reviewRating": { "@type": "Rating", "ratingValue": "5", "bestRating": "5" },
+        "author": { "@type": "Person", "name": "${esc(caseData.client || '客户')}" }
+      }
+    }
+    </script>
+  </section>`;
+}

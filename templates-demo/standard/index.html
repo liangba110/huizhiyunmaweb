@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>企业品牌官网 - 基础版 | 汇智云码模板</title>
+  <meta name="description" content="汇智云码企业官网模板 - 响应式设计，适合个人工作室和初创团队">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <style>
+    :root {
+      --primary: #4F46E5;
+      --primary-dark: #3730A3;
+      --primary-light: #818CF8;
+      --bg: #0F172A;
+      --bg-card: #1E293B;
+      --text: #F1F5F9;
+      --text-muted: #94A3B8;
+      --radius: 12px;
+      --shadow: 0 8px 32px rgba(0,0,0,.3);
+    }
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    .bg-animated {
+      position: fixed; top:0; left:0; width:100%; height:100%;
+      background: linear-gradient(135deg, #0F172A 0%, #1E1B4B 50%, #0F172A 100%);
+      z-index: -2;
+    }
+    .bg-grid {
+      position: fixed; top:0; left:0; width:100%; height:100%;
+      background-image: 
+        linear-gradient(rgba(79,70,229,.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(79,70,229,.08) 1px, transparent 1px);
+      background-size: 60px 60px;
+      z-index: -1;
+    }
+    .bg-glow {
+      position: fixed; top:-20%; left:20%; width:60%; height:60%;
+      background: radial-gradient(circle, rgba(79,70,229,.15) 0%, transparent 70%);
+      z-index: -1;
+    }
+    .container { max-width: 1200px; margin:0 auto; padding:0 24px; }
+
+    /* Header */
+    header {
+      padding: 20px 0;
+      background: rgba(15,23,42,.8);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(79,70,229,.2);
+      position: sticky; top:0; z-index:100;
+    }
+    header .container { display:flex; justify-content:space-between; align-items:center; }
+    .logo { font-size:24px; font-weight:800; color:var(--text); text-decoration:none; }
+    .logo span { color:var(--primary-light); }
+    nav a {
+      color: var(--text-muted); text-decoration:none; margin-left:28px;
+      font-size:15px; transition: color .2s;
+    }
+    nav a:hover, nav a.active { color:var(--text); }
+    .btn {
+      display:inline-block; padding:10px 24px; border-radius:var(--radius);
+      font-weight:600; text-decoration:none; transition: all .2s; cursor:pointer;
+    }
+    .btn-primary { background:var(--primary); color:#fff; border:none; }
+    .btn-primary:hover { background:var(--primary-dark); transform:translateY(-2px); box-shadow:0 8px 24px rgba(79,70,229,.3); }
+    .btn-outline { border:2px solid var(--primary-light); color:var(--primary-light); background:transparent; }
+    .btn-outline:hover { background:var(--primary); color:#fff; border-color:var(--primary); }
+
+    /* Hero */
+    .hero {
+      text-align:center; padding:100px 0 80px;
+      position:relative;
+    }
+    .hero h1 { font-size:48px; font-weight:800; margin-bottom:16px; line-height:1.2; }
+    .hero h1 span { background:linear-gradient(135deg, #818CF8, #C084FC); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .hero p { font-size:18px; color:var(--text-muted); max-width:600px; margin:0 auto 32px; }
+    .hero-badge {
+      display:inline-block; padding:6px 16px; border-radius:20px;
+      background:rgba(79,70,229,.15); color:var(--primary-light); font-size:14px;
+      margin-bottom:20px; border:1px solid rgba(79,70,229,.3);
+    }
+
+    /* Sections */
+    section { padding:80px 0; }
+    .section-title { text-align:center; margin-bottom:48px; }
+    .section-title h2 { font-size:32px; font-weight:700; margin-bottom:12px; }
+    .section-title p { color:var(--text-muted); font-size:16px; }
+
+    /* Services */
+    .services-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(280px,1fr)); gap:24px; }
+    .service-card {
+      background:var(--bg-card); border-radius:var(--radius); padding:32px;
+      border:1px solid rgba(79,70,229,.1); transition: all .3s;
+    }
+    .service-card:hover { transform:translateY(-4px); border-color:var(--primary); box-shadow:0 12px 40px rgba(79,70,229,.15); }
+    .service-icon { width:48px; height:48px; border-radius:12px; background:rgba(79,70,229,.15); display:flex; align-items:center; justify-content:center; font-size:24px; margin-bottom:16px; }
+    .service-card h3 { font-size:18px; margin-bottom:8px; }
+    .service-card p { color:var(--text-muted); font-size:14px; line-height:1.7; }
+
+    /* About */
+    .about-grid { display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:center; }
+    .about-text p { color:var(--text-muted); margin-bottom:16px; }
+    .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; }
+    .stat { text-align:center; background:var(--bg-card); border-radius:var(--radius); padding:24px; border:1px solid rgba(79,70,229,.1); }
+    .stat-num { font-size:32px; font-weight:800; color:var(--primary-light); }
+    .stat-label { color:var(--text-muted); font-size:14px; margin-top:4px; }
+
+    /* Cases */
+    .cases-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(340px,1fr)); gap:24px; }
+    .case-card { background:var(--bg-card); border-radius:var(--radius); overflow:hidden; border:1px solid rgba(79,70,229,.1); transition: all .3s; }
+    .case-card:hover { transform:translateY(-4px); border-color:var(--primary); box-shadow:0 12px 40px rgba(79,70,229,.15); }
+    .case-img { height:200px; background:linear-gradient(135deg, #1E293B, #312E81); display:flex; align-items:center; justify-content:center; font-size:48px; }
+    .case-body { padding:24px; }
+    .case-body h3 { font-size:16px; margin-bottom:6px; }
+    .case-body p { color:var(--text-muted); font-size:13px; }
+
+    /* Contact */
+    .contact-grid { display:grid; grid-template-columns:1fr 1fr; gap:48px; }
+    .contact-info p { color:var(--text-muted); margin-bottom:8px; font-size:15px; }
+    .contact-info strong { color:var(--text); }
+    .contact-form input,.contact-form textarea {
+      width:100%; padding:12px 16px; border-radius:var(--radius); border:1px solid rgba(79,70,229,.2);
+      background:var(--bg-card); color:var(--text); font-size:15px; margin-bottom:16px;
+    }
+    .contact-form textarea { height:120px; resize:vertical; }
+
+    /* Footer */
+    footer { background:var(--bg-card); border-top:1px solid rgba(79,70,229,.1); padding:32px 0; text-align:center; }
+    footer p { color:var(--text-muted); font-size:14px; }
+
+    @media (max-width:768px) {
+      .hero h1 { font-size:32px; }
+      .about-grid,.contact-grid { grid-template-columns:1fr; }
+      nav a { margin-left:12px; font-size:13px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-animated"></div>
+  <div class="bg-grid"></div>
+  <div class="bg-glow"></div>
+
+  <header>
+    <div class="container">
+      <a href="#" class="logo">企业<span>官网</span></a>
+      <nav>
+        <a href="https://openai2000.cn" target="_blank" style="border:1px solid var(--primary-light);color:var(--primary-light);padding:4px 12px;border-radius:6px;">↩ 返回官网</a>
+        <a href="#" class="active">首页</a>
+        <a href="#services">服务</a>
+        <a href="#about">关于</a>
+        <a href="#cases">案例</a>
+        <a href="#contact">联系</a>
+      </nav>
+    </div>
+  </header>
+
+  <section class="hero">
+    <div class="container">
+      <div class="hero-badge">🚀 专业企业品牌官网模板</div>
+      <h1>助力企业打造<br><span>专业数字化品牌形象</span></h1>
+      <p>响应式设计 · 5个核心页面 · 纯HTML/CSS/JS · 源码交付 · 自由定制</p>
+      <a href="#services" class="btn btn-primary">了解更多</a>
+      <a href="#contact" class="btn btn-outline" style="margin-left:12px">联系我们</a>
+    </div>
+  </section>
+
+  <section id="services">
+    <div class="container">
+      <div class="section-title">
+        <h2>核心服务</h2>
+        <p>为企业提供一站式数字化解决方案</p>
+      </div>
+      <div class="services-grid">
+        <div class="service-card">
+          <div class="service-icon">🌐</div>
+          <h3>品牌官网建设</h3>
+          <p>专业级企业官网设计，5个核心页面覆盖品牌展示所需的全部场景</p>
+        </div>
+        <div class="service-card">
+          <div class="service-icon">📱</div>
+          <h3>移动端适配</h3>
+          <p>完全响应式设计，在手机、平板、电脑上均有出色展示效果</p>
+        </div>
+        <div class="service-card">
+          <div class="service-icon">🔍</div>
+          <h3>SEO优化</h3>
+          <p>内置基础SEO标签结构，帮助您的网站在搜索引擎中获得更好排名</p>
+        </div>
+        <div class="service-card">
+          <div class="service-icon">⚡</div>
+          <h3>性能优化</h3>
+          <p>轻量级代码，首屏加载极速，给访客流畅的浏览体验</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="about" style="background:rgba(79,70,229,.03)">
+    <div class="container">
+      <div class="about-grid">
+        <div class="about-text">
+          <div class="section-title" style="text-align:left">
+            <h2>关于我们</h2>
+            <p>一家专注于企业数字化服务的科技公司</p>
+          </div>
+          <p>我们致力于为中小企业提供高性价比的数字化解决方案。团队成员拥有10年以上互联网行业经验，已服务超过120家企业客户。</p>
+          <p>我们坚持「需求导向、敏捷交付、源码透明」的核心理念，确保每个项目都能为客户创造真实价值。</p>
+          <a href="#contact" class="btn btn-primary">联系我们</a>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="stat-num">120+</div><div class="stat-label">服务客户</div></div>
+          <div class="stat"><div class="stat-num">200+</div><div class="stat-label">成功案例</div></div>
+          <div class="stat"><div class="stat-num">8年+</div><div class="stat-label">行业经验</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="cases">
+    <div class="container">
+      <div class="section-title">
+        <h2>案例展示</h2>
+        <p>部分合作客户成功案例</p>
+      </div>
+      <div class="cases-grid">
+        <div class="case-card">
+          <div class="case-img">🏗️</div>
+          <div class="case-body"><h3>鑫达建筑集团</h3><p>企业品牌官网 · 建筑行业</p></div>
+        </div>
+        <div class="case-card">
+          <div class="case-img">🍽️</div>
+          <div class="case-body"><h3>味湘阁餐饮</h3><p>连锁餐饮品牌官网</p></div>
+        </div>
+        <div class="case-card">
+          <div class="case-img">📚</div>
+          <div class="case-body"><h3>智学教育科技</h3><p>教育培训机构官网</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="contact">
+    <div class="container">
+      <div class="section-title">
+        <h2>联系我们</h2>
+        <p>期待与您的合作</p>
+      </div>
+      <div class="contact-grid">
+        <div class="contact-info">
+          <p><strong>📞 电话：</strong>151-6528-0518</p>
+          <p><strong>📧 邮箱：</strong>contact@example.com</p>
+          <p><strong>💬 微信：</strong>bbks201805</p>
+          <p><strong>📍 地址：</strong>山东省青岛市胶州市阜安街道东关大街8号中央公园写字楼11楼</p>
+          <p style="margin-top:16px">欢迎来电或微信咨询，我们将在24小时内回复您。</p>
+        </div>
+        <form class="contact-form" onsubmit="event.preventDefault();alert('感谢咨询！我们会尽快与您联系。')">
+          <input type="text" placeholder="您的姓名" required>
+          <input type="tel" placeholder="联系电话" required>
+          <input type="email" placeholder="电子邮箱">
+          <textarea placeholder="请描述您的需求..." required></textarea>
+          <button type="submit" class="btn btn-primary" style="width:100%">提交咨询</button>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="container">
+      <p>© 2026 企业官网模板 · 汇智云码科技出品 · 鲁ICP备2026038130号</p>
+    </div>
+  </footer>
+</body>
+</html>
