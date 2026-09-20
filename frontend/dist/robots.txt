@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+
+Sitemap: https://openai2000.cn/sitemap.xml
+Sitemap: https://openai2000.cn/sitemap-articles.xml
+Sitemap: https://openai2000.cn/sitemap-cases.xml

@@ -12,8 +12,10 @@ id_ed25519*
 # === 依赖与构建产物 ===
 node_modules/
 **/node_modules/
+# dist/ 不全局排除：frontend/dist 是线上 SEO 静态页快照（300+ 城市站），属内容资产，需入库
 dist/
 **/dist/
+!frontend/dist/
 .cache/
 __pycache__/
 *.pyc
